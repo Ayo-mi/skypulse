@@ -1,0 +1,351 @@
+[
+  {
+    "step": "4.1 discovery.get(TOOL_ID)",
+    "ok": true,
+    "detail": {
+      "id": "580555be-16e6-4ee0-8b26-3b41ad7a417e",
+      "name": "Skypulse",
+      "category": "Real World",
+      "description_len": 3388,
+      "mcpTools_count": 5,
+      "mcpTool_names": [
+        "route_capacity_change",
+        "new_route_launches",
+        "frequency_losers",
+        "capacity_driver_analysis",
+        "carrier_capacity_ranking"
+      ],
+      "price": "0.000000",
+      "raw_keys": [
+        "id",
+        "name",
+        "description",
+        "price",
+        "category",
+        "isVerified",
+        "kind",
+        "mcpTools",
+        "totalQueries",
+        "successRate",
+        "uptimePercent",
+        "totalStaked",
+        "isProven"
+      ]
+    }
+  },
+  {
+    "step": "4.2 discovery.search(\"airline capacity routes\")",
+    "ok": true,
+    "detail": {
+      "total_hits": 5,
+      "skypulse_rank": 1,
+      "top_5": [
+        {
+          "id": "580555be-16e6-4ee0-8b26-3b41ad7a417e",
+          "name": "Skypulse"
+        },
+        {
+          "id": "976d3ad9-a77d-492b-8d16-5360a59ac83f",
+          "name": "STR Scout"
+        },
+        {
+          "id": "294100e8-c648-4e5f-a254-95a14b56e398",
+          "name": "Polymarket Intelligence"
+        },
+        {
+          "id": "6efe7cf9-1bc7-4218-936d-a8be86cafc49",
+          "name": "Voli MCP — Forex Volatility & Analysis Server"
+        },
+        {
+          "id": "6da2754b-e3bf-420f-a51b-69154bc6e5a8",
+          "name": "Trading Intelligence"
+        }
+      ]
+    }
+  },
+  {
+    "step": "4.2 discovery.search(\"flight route capacity intelligence\")",
+    "ok": true,
+    "detail": {
+      "total_hits": 20,
+      "skypulse_rank": 1,
+      "top_5": [
+        {
+          "id": "580555be-16e6-4ee0-8b26-3b41ad7a417e",
+          "name": "Skypulse"
+        },
+        {
+          "id": "6da2754b-e3bf-420f-a51b-69154bc6e5a8",
+          "name": "Trading Intelligence"
+        },
+        {
+          "id": "976d3ad9-a77d-492b-8d16-5360a59ac83f",
+          "name": "STR Scout"
+        },
+        {
+          "id": "73d57220-d1ab-4059-9710-550837a9dc1b",
+          "name": "Open Custom"
+        },
+        {
+          "id": "b44d7770-cc25-429d-8b70-33de0e2705d8",
+          "name": "BidScout Federal Intel"
+        }
+      ]
+    }
+  },
+  {
+    "step": "4.2 discovery.search(\"route launches airport\")",
+    "ok": true,
+    "detail": {
+      "total_hits": 8,
+      "skypulse_rank": 1,
+      "top_5": [
+        {
+          "id": "580555be-16e6-4ee0-8b26-3b41ad7a417e",
+          "name": "Skypulse"
+        },
+        {
+          "id": "bc96bc67-f8e2-43b1-9947-881684dbee88",
+          "name": "Token Launch Screener"
+        },
+        {
+          "id": "976d3ad9-a77d-492b-8d16-5360a59ac83f",
+          "name": "STR Scout"
+        },
+        {
+          "id": "73d57220-d1ab-4059-9710-550837a9dc1b",
+          "name": "Open Custom"
+        },
+        {
+          "id": "6c8e9676-6f58-4532-a8d2-6dcdfbb1026e",
+          "name": "LandlordLaw"
+        }
+      ]
+    }
+  },
+  {
+    "step": "4.3 P1 (route_capacity_change)",
+    "ok": true,
+    "detail": {
+      "query": "Which carriers added the most capacity on JFK-LAX over the past year?",
+      "expected_primary_tool": "route_capacity_change",
+      "elapsed_ms": 25432,
+      "response_len": 1470,
+      "response_preview": "Based on the most recent DOT T-100 data (Q1 2026), **JetBlue Airways** added the most measurable capacity among carriers with a prior baseline, while **United Airlines** significantly increased capacity via a new service launch in early 2026.\n\n| Carrier | Capacity Change (Seats) | Change (%) | Frequency Change | Comparison Period | Driver |\n| :--- | :--- | :--- | :--- | :--- | :--- |\n| **United Airlines** | 27,027 | N/A | +143 | 2026-Q1 launch | New launch/returned service |\n| **JetBlue Airways*",
+      "toolsUsed": [
+        {
+          "id": "580555be-16e6-4ee0-8b26-3b41ad7a417e",
+          "name": "Skypulse",
+          "skillCalls": 1
+        }
+      ],
+      "cost": {
+        "totalCostUsd": "0.029109",
+        "toolCostUsd": "0.000000",
+        "modelCostUsd": "0.029109"
+      },
+      "trace_summary": {
+        "toolCalls": 1,
+        "retryCount": 0,
+        "selfHealCount": 0,
+        "fallbackCount": 0,
+        "failureCount": 0,
+        "recoveryCount": 0,
+        "completionChecks": 0,
+        "loopCount": 2,
+        "toolStepCount": 2
+      },
+      "raw_keys": [
+        "success",
+        "response",
+        "toolsUsed",
+        "cost",
+        "durationMs",
+        "outcomeType",
+        "querySession",
+        "developerTrace",
+        "orchestrationMetrics"
+      ]
+    }
+  },
+  {
+    "step": "4.3 P2 (new_route_launches)",
+    "ok": true,
+    "detail": {
+      "query": "What new routes launched from ORD in 2025-Q3?",
+      "expected_primary_tool": "new_route_launches",
+      "elapsed_ms": 46546,
+      "response_len": 1560,
+      "response_preview": "Based on DOT T-100 reporting for the third quarter of 2025, several carriers launched or resumed service on routes involving Chicago O'Hare (ORD). Note that this data represents airport-pair records and includes both inbound and outbound segments reported during this period.\n\n### Selected New Route Launches involving ORD (2025-Q3)\n\n| Carrier | Origin | Destination | Frequency | Inferred Seats |\n| :--- | :--- | :--- | :--- | :--- |\n| **Qatar Airways** | DOH | ORD | 92 | 32,576 |\n| **Emirates** | ",
+      "toolsUsed": [
+        {
+          "id": "580555be-16e6-4ee0-8b26-3b41ad7a417e",
+          "name": "Skypulse",
+          "skillCalls": 1
+        }
+      ],
+      "cost": {
+        "totalCostUsd": "0.076896",
+        "toolCostUsd": "0.000000",
+        "modelCostUsd": "0.076896"
+      },
+      "trace_summary": {
+        "toolCalls": 1,
+        "retryCount": 0,
+        "selfHealCount": 0,
+        "fallbackCount": 0,
+        "failureCount": 0,
+        "recoveryCount": 0,
+        "completionChecks": 0,
+        "loopCount": 2,
+        "toolStepCount": 2
+      },
+      "raw_keys": [
+        "success",
+        "response",
+        "toolsUsed",
+        "cost",
+        "durationMs",
+        "outcomeType",
+        "querySession",
+        "developerTrace",
+        "orchestrationMetrics"
+      ]
+    }
+  },
+  {
+    "step": "4.3 P3 (frequency_losers)",
+    "ok": true,
+    "detail": {
+      "query": "Which US domestic routes lost the most frequency year-over-year?",
+      "expected_primary_tool": "frequency_losers",
+      "elapsed_ms": 23591,
+      "response_len": 1918,
+      "response_preview": "Based on the most recent data for US domestic routes, several major corridors experienced significant frequency declines, particularly on routes involving New York (JFK). The largest absolute drops were observed on regional and transcontinental routes operated by Delta, JetBlue, and Alaska Airlines.\n\nThe following table highlights the domestic routes with the most substantial frequency losses found in the recent data. Note that these metrics represent the largest quarterly shifts (e.g., 2026-Q1 ",
+      "toolsUsed": [
+        {
+          "id": "580555be-16e6-4ee0-8b26-3b41ad7a417e",
+          "name": "Skypulse",
+          "skillCalls": 2
+        }
+      ],
+      "cost": {
+        "totalCostUsd": "0.038969",
+        "toolCostUsd": "0.000000",
+        "modelCostUsd": "0.038969"
+      },
+      "trace_summary": {
+        "toolCalls": 2,
+        "retryCount": 0,
+        "selfHealCount": 0,
+        "fallbackCount": 0,
+        "failureCount": 0,
+        "recoveryCount": 0,
+        "completionChecks": 0,
+        "loopCount": 3,
+        "toolStepCount": 3
+      },
+      "raw_keys": [
+        "success",
+        "response",
+        "toolsUsed",
+        "cost",
+        "durationMs",
+        "outcomeType",
+        "querySession",
+        "developerTrace",
+        "orchestrationMetrics"
+      ]
+    }
+  },
+  {
+    "step": "4.3 P4 (capacity_driver_analysis)",
+    "ok": true,
+    "detail": {
+      "query": "Did LAX-NRT capacity grow because of more flights or larger aircraft?",
+      "expected_primary_tool": "capacity_driver_analysis",
+      "elapsed_ms": 18599,
+      "response_len": 1571,
+      "response_preview": "Based on DOT T-100 data through Q1 2026, the LAX-NRT route did not show meaningful capacity growth driven by larger aircraft. For the major carriers analyzed, capacity was either flat or declining during late 2025 and early 2026.\n\nAs of April 22, 2026, the specific drivers for the analyzed carriers are as follows:\n\n| Carrier | Comparison Period | Frequency Change | Capacity Change | Primary Driver |\n| :--- | :--- | :--- | :--- | :--- |\n| **United (UA)** | 2025-Q4 vs. 2025-Q3 | +1.1% | +0.84% | M",
+      "toolsUsed": [
+        {
+          "id": "580555be-16e6-4ee0-8b26-3b41ad7a417e",
+          "name": "Skypulse",
+          "skillCalls": 2
+        }
+      ],
+      "cost": {
+        "totalCostUsd": "0.019162",
+        "toolCostUsd": "0.000000",
+        "modelCostUsd": "0.019162"
+      },
+      "trace_summary": {
+        "toolCalls": 2,
+        "retryCount": 0,
+        "selfHealCount": 0,
+        "fallbackCount": 0,
+        "failureCount": 0,
+        "recoveryCount": 0,
+        "completionChecks": 0,
+        "loopCount": 3,
+        "toolStepCount": 3
+      },
+      "raw_keys": [
+        "success",
+        "response",
+        "toolsUsed",
+        "cost",
+        "durationMs",
+        "outcomeType",
+        "querySession",
+        "developerTrace",
+        "orchestrationMetrics"
+      ]
+    }
+  },
+  {
+    "step": "4.3 P5 (carrier_capacity_ranking)",
+    "ok": true,
+    "detail": {
+      "query": "Which carriers added the most narrowbody capacity in the Dallas market this quarter?",
+      "expected_primary_tool": "carrier_capacity_ranking",
+      "elapsed_ms": 23971,
+      "response_len": 878,
+      "response_preview": "Based on the most recent data for the Dallas (DFW) narrowbody market, only two carriers showed positive absolute capacity growth. All other ranked carriers either remained flat or reduced capacity.\n\nHere is the complete returned collection for ranking (16 items).\n\n| Carrier Name | Rank | Carrier | Routes Gained |\n| :--- | :--- | :--- | :--- |\n| Volaris | 1 | Y4 | 0 |\n| Unknown (auto) | 2 | AV | 2 |\n| JetBlue Airways | 3 | B6 | 8 |\n| Southwest Airlines | 4 | WN | 2 |\n| Unknown (auto) | 5 | LR | 2",
+      "toolsUsed": [
+        {
+          "id": "580555be-16e6-4ee0-8b26-3b41ad7a417e",
+          "name": "Skypulse",
+          "skillCalls": 2
+        }
+      ],
+      "cost": {
+        "totalCostUsd": "0.032241",
+        "toolCostUsd": "0.000000",
+        "modelCostUsd": "0.032241"
+      },
+      "trace_summary": {
+        "toolCalls": 2,
+        "retryCount": 0,
+        "selfHealCount": 0,
+        "fallbackCount": 0,
+        "failureCount": 0,
+        "recoveryCount": 0,
+        "completionChecks": 0,
+        "loopCount": 4,
+        "toolStepCount": 4
+      },
+      "raw_keys": [
+        "success",
+        "response",
+        "toolsUsed",
+        "cost",
+        "durationMs",
+        "outcomeType",
+        "querySession",
+        "developerTrace",
+        "orchestrationMetrics"
+      ]
+    }
+  }
+]

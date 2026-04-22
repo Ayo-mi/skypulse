@@ -1,0 +1,1148 @@
+{
+  "id": "580555be-16e6-4ee0-8b26-3b41ad7a417e",
+  "name": "Skypulse",
+  "description": "SkyPulse delivers route-level airline capacity intelligence. Derived directly from U.S. DOT T-100 Segment data for both domestic and international carriers — 190K+ route-month snapshots and 100K+ pre-computed quarter-over-quarter changes — in one MCP toolkit for aviation analysts, airport planners, travel journalists, airline equity analysts, and destination marketing organizations. Point it at a city pair, airport, or market to track capacity shifts, spot new-route launches, identify frequency pullbacks, attribute capacity drivers (frequency vs fleet upgauge), and rank carriers head-to-head.\r\n\r\nFeatures\r\n\r\n-Route-level change tracking: route_capacity_change returns growth, decline, launch, and suspension events for any origin–destination city pair over a lookback window, with before/after frequency, inferred seats, aircraft-type mix, and source refs.\r\n-Launch detection: new_route_launches surfaces every carrier × route that began service at a specified airport during a given period, sorted by inferred seat capacity.\r\n-Frequency losers: frequency_losers ranks the steepest service cuts at a market (airport or city), with prior/current frequency and percent change.\r\n-Capacity driver analysis: capacity_driver_analysis decomposes a route's capacity change into its frequency component and its fleet-mix component (upgauge/downgauge), with prior/current aircraft mixes.\r\n-Market leaderboard: carrier_capacity_ranking ranks carriers by total capacity change at a given airport or city, filterable by aircraft category (narrowbody, widebody, regional_jet, turboprop).\r\nData coverage\r\n\r\n-Period: Jul 2025 – Mar 2026 (9 months of T-100 releases, updated as new BTS vintages publish)\r\n-1,780 airports, 293 carriers, 190K+ route-month snapshots\r\n-IATA codes throughout (not raw BTS DOT numerics) — clean B738, A321, CRJ9 etc. ready for downstream reasoning\r\n-Monthly granularity preserved; aggregated to quarterly at read time\r\n-Freshness metadata and single-source confidence notes included on every response\r\nTry asking\r\n\r\n-\"How has JFK–LAX capacity changed across carriers in the last 12 months?\"\r\n-\"Which airlines launched new routes out of ORD in Q4 2025?\"\r\n-\"Show me the biggest frequency cuts at Atlanta in Q4 2025.\"\r\n-\"For United on SFO–ORD, is the capacity change driven by frequency or by fleet swap?\"\r\n-\"Rank narrowbody carriers by capacity change at DFW in Q4 2025.\"\r\n-\"Which transborder routes to Mexico grew fastest over the last two quarters?\"\r\nAgent tips\r\n\r\n-Pass origin and destination as 3-letter IATA airport codes (e.g. JFK, LAX); pass market as a 3-letter IATA airport code too (city-level markets are not yet supported).\r\n-period accepts ISO quarters like 2025-Q4; days_back accepts a positive integer (used by route_capacity_change only).\r\n-carrier is a 2- or 3-letter IATA carrier code (e.g. AA, UA, VB); omit it to return all carriers on the route.\r\n-aircraft_category values on carrier_capacity_ranking: narrowbody, widebody, regional_jet, turboprop, or all.\r\n-Every response includes a data_freshness string describing the underlying T-100 vintage and announcement corpus — surface it in answers when users ask \"how recent is this data?\"\r\n-Every response includes source_refs and a confidence score (0–1); treat anything below 0.6 as single-source evidence.\r\n-Prefer structuredContent when present; it mirrors the JSON payload for schema-aware parsing.",
+  "price": "0.000000",
+  "category": "Real World",
+  "isVerified": false,
+  "kind": "mcp",
+  "mcpTools": [
+    {
+      "name": "route_capacity_change",
+      "description": "Route-level capacity and frequency change intelligence for a specific airport pair. Returns per-carrier deltas (frequency, inferred seats, aircraft mix) with DOT T-100 provenance and explicit data freshness. Premium answer product unbundled from OAG Schedules Analyser / Cirium Diio Mi for the covered US domestic + US-international market. Good prompts: \"Which carriers added the most capacity on JFK-LAX over the past 365 days?\" or \"Has AA reduced frequency on DFW-ORD this quarter?\".",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "origin",
+          "destination"
+        ],
+        "properties": {
+          "origin": {
+            "type": "string",
+            "examples": [
+              "JFK",
+              "ATL",
+              "DFW"
+            ],
+            "maxLength": 3,
+            "minLength": 3,
+            "description": "IATA origin airport code (3 uppercase letters)."
+          },
+          "days_back": {
+            "type": "number",
+            "default": 365,
+            "maximum": 730,
+            "minimum": 1,
+            "description": "How many days of history to consider. Defaults to 365."
+          },
+          "destination": {
+            "type": "string",
+            "examples": [
+              "LAX",
+              "LHR",
+              "ORD"
+            ],
+            "maxLength": 3,
+            "minLength": 3,
+            "description": "IATA destination airport code (3 uppercase letters)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "origin",
+          "destination",
+          "changes",
+          "as_of",
+          "comparison_period",
+          "source_refs",
+          "confidence",
+          "known_unknowns",
+          "data_freshness"
+        ],
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp when the response was computed."
+          },
+          "origin": {
+            "type": "string",
+            "description": "Echo of the input origin IATA code."
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "carrier",
+                "comparison_period",
+                "change_type",
+                "prior_frequency",
+                "current_frequency",
+                "frequency_change_abs",
+                "frequency_change_pct",
+                "prior_inferred_seats",
+                "current_inferred_seats",
+                "capacity_change_abs",
+                "capacity_change_pct",
+                "aircraft_type_mix_prior",
+                "aircraft_type_mix_current",
+                "confidence",
+                "known_unknowns",
+                "source_refs"
+              ],
+              "properties": {
+                "carrier": {
+                  "type": "string",
+                  "description": "IATA carrier code (e.g. \"AA\")."
+                },
+                "confidence": {
+                  "type": "number",
+                  "maximum": 1,
+                  "minimum": 0,
+                  "description": "Per-row confidence score."
+                },
+                "change_type": {
+                  "enum": [
+                    "launch",
+                    "suspension",
+                    "resumption",
+                    "growth",
+                    "reduction",
+                    "gauge_up",
+                    "gauge_down"
+                  ],
+                  "type": "string",
+                  "description": "Classification of the change: launch / suspension / resumption / growth / reduction / gauge_up / gauge_down."
+                },
+                "source_refs": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "source",
+                      "vintage"
+                    ],
+                    "properties": {
+                      "url": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "Optional link to the raw source."
+                      },
+                      "source": {
+                        "type": "string",
+                        "description": "Human-readable source label (e.g. \"DOT T-100\")"
+                      },
+                      "vintage": {
+                        "type": "string",
+                        "description": "Source vintage (e.g. \"Q3 2025 (published Jan 2026)\")"
+                      }
+                    },
+                    "description": "One provenance reference backing the answer.",
+                    "additionalProperties": false
+                  }
+                },
+                "carrier_name": {
+                  "type": "string",
+                  "description": "Human-readable carrier name."
+                },
+                "known_unknowns": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Per-row gaps (missing mix data, single-source, etc.) or null."
+                },
+                "prior_frequency": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "description": "Total departures in the prior window (null for launches)."
+                },
+                "comparison_period": {
+                  "type": "string",
+                  "description": "Comparison window, e.g. \"2025-Q3 vs 2025-Q2\"."
+                },
+                "current_frequency": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "description": "Total departures in the current window (null for suspensions)."
+                },
+                "capacity_change_abs": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "description": "Absolute change in inferred seats."
+                },
+                "capacity_change_pct": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Percentage change in inferred seats."
+                },
+                "frequency_change_abs": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "description": "Absolute change in departures (current − prior)."
+                },
+                "frequency_change_pct": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Percentage change in departures."
+                },
+                "prior_inferred_seats": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "description": "Inferred seat capacity in the prior window."
+                },
+                "current_inferred_seats": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "description": "Inferred seat capacity in the current window."
+                },
+                "aircraft_type_mix_prior": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "description": "Aircraft type → frequency (departures) mix for the period. Keys are IATA aircraft type codes (e.g. \"B738\"), values are integer departure counts.",
+                  "additionalProperties": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "aircraft_type_mix_current": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "description": "Aircraft type → frequency (departures) mix for the period. Keys are IATA aircraft type codes (e.g. \"B738\"), values are integer departure counts.",
+                  "additionalProperties": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              },
+              "additionalProperties": false
+            },
+            "description": "Per-carrier change objects for the route pair, one row per carrier per comparison window, ordered by most recent comparison."
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "description": "Aggregate confidence score for the response (0–1)."
+          },
+          "destination": {
+            "type": "string",
+            "description": "Echo of the input destination IATA code."
+          },
+          "source_refs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "source",
+                "vintage"
+              ],
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "format": "uri",
+                  "description": "Optional link to the raw source."
+                },
+                "source": {
+                  "type": "string",
+                  "description": "Human-readable source label (e.g. \"DOT T-100\")"
+                },
+                "vintage": {
+                  "type": "string",
+                  "description": "Source vintage (e.g. \"Q3 2025 (published Jan 2026)\")"
+                }
+              },
+              "description": "One provenance reference backing the answer.",
+              "additionalProperties": false
+            },
+            "description": "Every source that contributed evidence to this response."
+          },
+          "data_freshness": {
+            "type": "string",
+            "description": "Explicit freshness label in the form \"Source: DOT T-100 <period> (published <month year>) + Press Releases through <month year> — as of <iso timestamp>\"."
+          },
+          "known_unknowns": {
+            "type": "string",
+            "description": "Explicit, human-readable description of any data gaps, lag, or uncertainty. \"None identified\" if clean."
+          },
+          "comparison_period": {
+            "type": "string",
+            "description": "Time windows being compared, e.g. \"2025-Q3 vs 2025-Q2\". \"N/A\" when no data was found."
+          }
+        },
+        "description": "Route-level capacity and frequency change intelligence for an origin→destination airport pair.",
+        "additionalProperties": false
+      },
+      "_meta": {
+        "pricing": {},
+        "surface": "both",
+        "rateLimit": {
+          "cooldownMs": 250,
+          "maxConcurrency": 8,
+          "maxRequestsPerMinute": 120
+        },
+        "latencyClass": "instant",
+        "queryEligible": true
+      },
+      "executeEligible": false,
+      "executePriceUsd": null,
+      "hasStructuredGuidance": false
+    },
+    {
+      "name": "new_route_launches",
+      "description": "Detect new route launches and service resumptions at a given airport. Returns every launched/resumed carrier-route with inferred seats and effective date. Good prompts: \"What new routes launched from ORD in 2025-Q3?\" or \"Which carriers resumed service to SEA last quarter?\".",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "airport"
+        ],
+        "properties": {
+          "period": {
+            "type": "string",
+            "examples": [
+              "2025-Q3",
+              "2025-08"
+            ],
+            "description": "Optional period filter, e.g. \"2025-Q3\" or \"2025-08\". If omitted, returns all recent periods."
+          },
+          "airport": {
+            "type": "string",
+            "examples": [
+              "ORD",
+              "ATL",
+              "SEA"
+            ],
+            "maxLength": 3,
+            "minLength": 3,
+            "description": "IATA airport code to query (matches origin OR destination)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "airport",
+          "period",
+          "routes",
+          "as_of",
+          "comparison_period",
+          "source_refs",
+          "confidence",
+          "known_unknowns",
+          "data_freshness"
+        ],
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp when the response was computed."
+          },
+          "period": {
+            "type": "string",
+            "description": "Echo of the period filter, or \"all\" if no filter was supplied."
+          },
+          "routes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "carrier",
+                "origin",
+                "destination",
+                "change_type",
+                "comparison_period",
+                "current_frequency",
+                "current_inferred_seats",
+                "effective_date",
+                "confidence",
+                "source_refs"
+              ],
+              "properties": {
+                "origin": {
+                  "type": "string",
+                  "description": "IATA origin airport code."
+                },
+                "carrier": {
+                  "type": "string",
+                  "description": "IATA carrier code."
+                },
+                "confidence": {
+                  "type": "number",
+                  "maximum": 1,
+                  "minimum": 0
+                },
+                "change_type": {
+                  "enum": [
+                    "launch",
+                    "resumption"
+                  ],
+                  "type": "string",
+                  "description": "launch = first time observed; resumption = previously suspended service."
+                },
+                "destination": {
+                  "type": "string",
+                  "description": "IATA destination airport code."
+                },
+                "source_refs": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "source",
+                      "vintage"
+                    ],
+                    "properties": {
+                      "url": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "Optional link to the raw source."
+                      },
+                      "source": {
+                        "type": "string",
+                        "description": "Human-readable source label (e.g. \"DOT T-100\")"
+                      },
+                      "vintage": {
+                        "type": "string",
+                        "description": "Source vintage (e.g. \"Q3 2025 (published Jan 2026)\")"
+                      }
+                    },
+                    "description": "One provenance reference backing the answer.",
+                    "additionalProperties": false
+                  }
+                },
+                "carrier_name": {
+                  "type": "string",
+                  "description": "Human-readable carrier name."
+                },
+                "effective_date": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "ISO 8601 effective date derived from the source window."
+                },
+                "comparison_period": {
+                  "type": "string",
+                  "description": "Comparison window this launch/resumption was detected in."
+                },
+                "current_frequency": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "description": "Departures in the current window."
+                },
+                "current_inferred_seats": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "description": "Inferred seats in the current window."
+                }
+              },
+              "additionalProperties": false
+            },
+            "description": "One entry per launched or resumed route-carrier combination."
+          },
+          "airport": {
+            "type": "string",
+            "description": "Echo of the input airport IATA code."
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "description": "Aggregate confidence score for the response (0–1)."
+          },
+          "source_refs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "source",
+                "vintage"
+              ],
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "format": "uri",
+                  "description": "Optional link to the raw source."
+                },
+                "source": {
+                  "type": "string",
+                  "description": "Human-readable source label (e.g. \"DOT T-100\")"
+                },
+                "vintage": {
+                  "type": "string",
+                  "description": "Source vintage (e.g. \"Q3 2025 (published Jan 2026)\")"
+                }
+              },
+              "description": "One provenance reference backing the answer.",
+              "additionalProperties": false
+            },
+            "description": "Every source that contributed evidence to this response."
+          },
+          "data_freshness": {
+            "type": "string",
+            "description": "Explicit freshness label in the form \"Source: DOT T-100 <period> (published <month year>) + Press Releases through <month year> — as of <iso timestamp>\"."
+          },
+          "known_unknowns": {
+            "type": "string",
+            "description": "Explicit, human-readable description of any data gaps, lag, or uncertainty. \"None identified\" if clean."
+          },
+          "comparison_period": {
+            "type": "string",
+            "description": "Time windows being compared, e.g. \"2025-Q3 vs 2025-Q2\". \"N/A\" when no data was found."
+          }
+        },
+        "description": "New route launches and service resumptions at a given airport over the most recent available periods.",
+        "additionalProperties": false
+      },
+      "_meta": {
+        "pricing": {},
+        "surface": "both",
+        "rateLimit": {
+          "cooldownMs": 250,
+          "maxConcurrency": 8,
+          "maxRequestsPerMinute": 120
+        },
+        "latencyClass": "instant",
+        "queryEligible": true
+      },
+      "executeEligible": false,
+      "executePriceUsd": null,
+      "hasStructuredGuidance": false
+    },
+    {
+      "name": "frequency_losers",
+      "description": "Ranks routes losing the most frequency, ordered by steepest percentage decline. Optionally scoped to a single market. Useful for competitive intelligence and market contraction analysis. Good prompts: \"Which US domestic routes lost the most frequency year-over-year?\" or \"Which ATL routes are contracting fastest?\".",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "market": {
+            "type": "string",
+            "examples": [
+              "ATL",
+              "LAX"
+            ],
+            "maxLength": 3,
+            "minLength": 3,
+            "description": "Optional IATA airport code to scope the leaderboard. If omitted, returns the network-wide leaderboard."
+          },
+          "period": {
+            "type": "string",
+            "examples": [
+              "2025-Q3"
+            ],
+            "description": "Optional period filter (e.g. \"2025-Q3\"). If omitted, returns recent periods."
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "market",
+          "period",
+          "losers",
+          "as_of",
+          "comparison_period",
+          "source_refs",
+          "confidence",
+          "known_unknowns",
+          "data_freshness"
+        ],
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp when the response was computed."
+          },
+          "losers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "origin",
+                "destination",
+                "carrier",
+                "comparison_period",
+                "frequency_change_pct",
+                "frequency_change_abs",
+                "prior_frequency",
+                "current_frequency",
+                "confidence"
+              ],
+              "properties": {
+                "origin": {
+                  "type": "string"
+                },
+                "carrier": {
+                  "type": "string"
+                },
+                "confidence": {
+                  "type": "number",
+                  "maximum": 1,
+                  "minimum": 0
+                },
+                "destination": {
+                  "type": "string"
+                },
+                "carrier_name": {
+                  "type": "string"
+                },
+                "prior_frequency": {
+                  "type": "integer"
+                },
+                "comparison_period": {
+                  "type": "string"
+                },
+                "current_frequency": {
+                  "type": "integer"
+                },
+                "frequency_change_abs": {
+                  "type": "integer"
+                },
+                "frequency_change_pct": {
+                  "type": "number",
+                  "description": "Negative number; largest declines first."
+                }
+              },
+              "additionalProperties": false
+            },
+            "description": "Ordered list of routes with the biggest frequency reductions."
+          },
+          "market": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Echo of the market filter, or null if network-wide."
+          },
+          "period": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Echo of the period filter, or null."
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "description": "Aggregate confidence score for the response (0–1)."
+          },
+          "source_refs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "source",
+                "vintage"
+              ],
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "format": "uri",
+                  "description": "Optional link to the raw source."
+                },
+                "source": {
+                  "type": "string",
+                  "description": "Human-readable source label (e.g. \"DOT T-100\")"
+                },
+                "vintage": {
+                  "type": "string",
+                  "description": "Source vintage (e.g. \"Q3 2025 (published Jan 2026)\")"
+                }
+              },
+              "description": "One provenance reference backing the answer.",
+              "additionalProperties": false
+            },
+            "description": "Every source that contributed evidence to this response."
+          },
+          "data_freshness": {
+            "type": "string",
+            "description": "Explicit freshness label in the form \"Source: DOT T-100 <period> (published <month year>) + Press Releases through <month year> — as of <iso timestamp>\"."
+          },
+          "known_unknowns": {
+            "type": "string",
+            "description": "Explicit, human-readable description of any data gaps, lag, or uncertainty. \"None identified\" if clean."
+          },
+          "comparison_period": {
+            "type": "string",
+            "description": "Time windows being compared, e.g. \"2025-Q3 vs 2025-Q2\". \"N/A\" when no data was found."
+          }
+        },
+        "description": "Routes losing the most frequency/capacity, ranked by steepest percentage decline.",
+        "additionalProperties": false
+      },
+      "_meta": {
+        "pricing": {},
+        "surface": "both",
+        "rateLimit": {
+          "cooldownMs": 250,
+          "maxConcurrency": 8,
+          "maxRequestsPerMinute": 120
+        },
+        "latencyClass": "instant",
+        "queryEligible": true
+      },
+      "executeEligible": false,
+      "executePriceUsd": null,
+      "hasStructuredGuidance": false
+    },
+    {
+      "name": "capacity_driver_analysis",
+      "description": "Determines whether capacity change on a route is driven by frequency (more/fewer flights) or gauge (larger/smaller aircraft). Returns per-carrier driver classification with aircraft mix evidence. Good prompt: \"Did LAX-NRT capacity grow because of more weekly flights or larger aircraft?\".",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "origin",
+          "destination"
+        ],
+        "properties": {
+          "origin": {
+            "type": "string",
+            "examples": [
+              "SFO"
+            ],
+            "maxLength": 3,
+            "minLength": 3,
+            "description": "IATA origin airport code."
+          },
+          "carrier": {
+            "type": "string",
+            "examples": [
+              "UA",
+              "AA"
+            ],
+            "maxLength": 2,
+            "minLength": 2,
+            "description": "Optional IATA carrier code (2 chars). If omitted, returns all carriers."
+          },
+          "destination": {
+            "type": "string",
+            "examples": [
+              "ORD"
+            ],
+            "maxLength": 3,
+            "minLength": 3,
+            "description": "IATA destination airport code."
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "origin",
+          "destination",
+          "carrier",
+          "analysis",
+          "as_of",
+          "comparison_period",
+          "source_refs",
+          "confidence",
+          "known_unknowns",
+          "data_freshness"
+        ],
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp when the response was computed."
+          },
+          "origin": {
+            "type": "string"
+          },
+          "carrier": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Echo of the carrier filter, or null."
+          },
+          "analysis": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "carrier",
+                "comparison_period",
+                "driver",
+                "frequency_change_pct",
+                "capacity_change_pct",
+                "aircraft_type_mix_prior",
+                "aircraft_type_mix_current",
+                "confidence",
+                "known_unknowns"
+              ],
+              "properties": {
+                "driver": {
+                  "enum": [
+                    "frequency_driven",
+                    "gauge_driven",
+                    "mixed",
+                    "flat",
+                    "decline"
+                  ],
+                  "type": "string",
+                  "description": "Primary driver of capacity change. gauge_driven = aircraft up-gauged, frequency_driven = more/fewer flights, mixed = both move together, flat = <5% change, decline = contraction."
+                },
+                "carrier": {
+                  "type": "string"
+                },
+                "confidence": {
+                  "type": "number",
+                  "maximum": 1,
+                  "minimum": 0
+                },
+                "carrier_name": {
+                  "type": "string"
+                },
+                "known_unknowns": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "comparison_period": {
+                  "type": "string"
+                },
+                "capacity_change_pct": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "frequency_change_pct": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "aircraft_type_mix_prior": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "description": "Aircraft type → frequency (departures) mix for the period. Keys are IATA aircraft type codes (e.g. \"B738\"), values are integer departure counts.",
+                  "additionalProperties": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "aircraft_type_mix_current": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "description": "Aircraft type → frequency (departures) mix for the period. Keys are IATA aircraft type codes (e.g. \"B738\"), values are integer departure counts.",
+                  "additionalProperties": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "description": "Aggregate confidence score for the response (0–1)."
+          },
+          "destination": {
+            "type": "string"
+          },
+          "source_refs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "source",
+                "vintage"
+              ],
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "format": "uri",
+                  "description": "Optional link to the raw source."
+                },
+                "source": {
+                  "type": "string",
+                  "description": "Human-readable source label (e.g. \"DOT T-100\")"
+                },
+                "vintage": {
+                  "type": "string",
+                  "description": "Source vintage (e.g. \"Q3 2025 (published Jan 2026)\")"
+                }
+              },
+              "description": "One provenance reference backing the answer.",
+              "additionalProperties": false
+            },
+            "description": "Every source that contributed evidence to this response."
+          },
+          "data_freshness": {
+            "type": "string",
+            "description": "Explicit freshness label in the form \"Source: DOT T-100 <period> (published <month year>) + Press Releases through <month year> — as of <iso timestamp>\"."
+          },
+          "known_unknowns": {
+            "type": "string",
+            "description": "Explicit, human-readable description of any data gaps, lag, or uncertainty. \"None identified\" if clean."
+          },
+          "comparison_period": {
+            "type": "string",
+            "description": "Time windows being compared, e.g. \"2025-Q3 vs 2025-Q2\". \"N/A\" when no data was found."
+          }
+        },
+        "description": "Determines whether capacity change on a route is frequency-driven (more/fewer flights) or gauge-driven (larger/smaller aircraft).",
+        "additionalProperties": false
+      },
+      "_meta": {
+        "pricing": {},
+        "surface": "both",
+        "rateLimit": {
+          "cooldownMs": 250,
+          "maxConcurrency": 8,
+          "maxRequestsPerMinute": 120
+        },
+        "latencyClass": "instant",
+        "queryEligible": true
+      },
+      "executeEligible": false,
+      "executePriceUsd": null,
+      "hasStructuredGuidance": false
+    },
+    {
+      "name": "carrier_capacity_ranking",
+      "description": "Carrier leaderboard by seat capacity change in a given market. Optional aircraft category filter (narrowbody / widebody / regional_jet / turboprop). Good prompt: \"Which carriers added the most narrowbody capacity in the Dallas market this quarter?\".",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "market"
+        ],
+        "properties": {
+          "market": {
+            "type": "string",
+            "examples": [
+              "DFW",
+              "LAX"
+            ],
+            "maxLength": 3,
+            "minLength": 3,
+            "description": "IATA airport code defining the market (matches origin OR destination)."
+          },
+          "period": {
+            "type": "string",
+            "examples": [
+              "2025-Q3"
+            ],
+            "description": "Optional period filter (e.g. \"2025-Q3\")."
+          },
+          "aircraft_category": {
+            "enum": [
+              "narrowbody",
+              "widebody",
+              "regional_jet",
+              "turboprop",
+              "other"
+            ],
+            "type": "string",
+            "description": "Optional category filter. Only rows whose dominant current aircraft falls in the category are counted."
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": [
+          "market",
+          "aircraft_category",
+          "period",
+          "ranking",
+          "as_of",
+          "comparison_period",
+          "source_refs",
+          "confidence",
+          "known_unknowns",
+          "data_freshness"
+        ],
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp when the response was computed."
+          },
+          "market": {
+            "type": "string"
+          },
+          "period": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ranking": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "rank",
+                "carrier",
+                "total_capacity_change_abs",
+                "total_capacity_change_pct",
+                "total_current_seats",
+                "total_prior_seats",
+                "routes_gained",
+                "routes_lost",
+                "routes_unchanged"
+              ],
+              "properties": {
+                "rank": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "carrier": {
+                  "type": "string"
+                },
+                "routes_lost": {
+                  "type": "integer",
+                  "description": "Count of suspension/reduction/gauge_down rows for the carrier in scope."
+                },
+                "carrier_name": {
+                  "type": "string"
+                },
+                "routes_gained": {
+                  "type": "integer",
+                  "description": "Count of launch/resumption/growth/gauge_up rows for the carrier in scope."
+                },
+                "routes_unchanged": {
+                  "type": "integer",
+                  "description": "Count of rows where |freq change| < 5% and |capacity change| < 5%."
+                },
+                "total_prior_seats": {
+                  "type": "integer"
+                },
+                "total_current_seats": {
+                  "type": "integer"
+                },
+                "total_capacity_change_abs": {
+                  "type": "integer"
+                },
+                "total_capacity_change_pct": {
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "description": "Aggregate confidence score for the response (0–1)."
+          },
+          "source_refs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "source",
+                "vintage"
+              ],
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "format": "uri",
+                  "description": "Optional link to the raw source."
+                },
+                "source": {
+                  "type": "string",
+                  "description": "Human-readable source label (e.g. \"DOT T-100\")"
+                },
+                "vintage": {
+                  "type": "string",
+                  "description": "Source vintage (e.g. \"Q3 2025 (published Jan 2026)\")"
+                }
+              },
+              "description": "One provenance reference backing the answer.",
+              "additionalProperties": false
+            },
+            "description": "Every source that contributed evidence to this response."
+          },
+          "data_freshness": {
+            "type": "string",
+            "description": "Explicit freshness label in the form \"Source: DOT T-100 <period> (published <month year>) + Press Releases through <month year> — as of <iso timestamp>\"."
+          },
+          "known_unknowns": {
+            "type": "string",
+            "description": "Explicit, human-readable description of any data gaps, lag, or uncertainty. \"None identified\" if clean."
+          },
+          "aircraft_category": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "comparison_period": {
+            "type": "string",
+            "description": "Time windows being compared, e.g. \"2025-Q3 vs 2025-Q2\". \"N/A\" when no data was found."
+          }
+        },
+        "description": "Ranks carriers in the given market by total seat capacity change.",
+        "additionalProperties": false
+      },
+      "_meta": {
+        "pricing": {},
+        "surface": "both",
+        "rateLimit": {
+          "cooldownMs": 250,
+          "maxConcurrency": 8,
+          "maxRequestsPerMinute": 120
+        },
+        "latencyClass": "instant",
+        "queryEligible": true
+      },
+      "executeEligible": false,
+      "executePriceUsd": null,
+      "hasStructuredGuidance": true,
+      "structuredGuidance": {
+        "callOrderHints": [],
+        "parameterCaveats": [
+          "Optional aircraft category filter (narrowbody / widebody / regional_jet / turboprop)"
+        ],
+        "edgeCaseNotes": []
+      }
+    }
+  ],
+  "totalQueries": 17,
+  "successRate": "100.00",
+  "uptimePercent": "100.00",
+  "totalStaked": "10.000000",
+  "isProven": false
+}

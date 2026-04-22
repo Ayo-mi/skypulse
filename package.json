@@ -1,0 +1,67 @@
+{
+  "name": "skypulse",
+  "version": "1.0.0",
+  "description": "SkyPulse — Airline Route Change & Capacity Intelligence MCP Server for the Context Protocol",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "migrate": "ts-node src/db/migrate.ts",
+    "seed": "ts-node src/db/seed.ts",
+    "ingest:t100": "ts-node src/ingestion/dotT100.ts",
+    "ingest:announcements": "ts-node src/ingestion/announcements.ts",
+    "recompute": "ts-node src/pipeline/recompute.ts",
+    "fixture:t100": "ts-node scripts/generateSampleT100.ts",
+    "clean:fixture": "ts-node scripts/cleanFixtureData.ts",
+    "test": "jest",
+    "test:schemas": "jest tests/schemas.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "mcp",
+    "context-protocol",
+    "ctxprotocol",
+    "airline",
+    "routes",
+    "capacity",
+    "aviation",
+    "intelligence"
+  ],
+  "author": "SkyPulse",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "overrides": {
+    "jose": "^5.9.6"
+  },
+  "dependencies": {
+    "@ctxprotocol/sdk": "^0.13.0",
+    "@modelcontextprotocol/sdk": "^1.10.2",
+    "adm-zip": "^0.5.16",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "csv-parse": "^5.6.0",
+    "dotenv": "^17.4.2",
+    "express": "^4.21.2",
+    "ioredis": "^5.4.2",
+    "node-cron": "^3.0.3",
+    "pg": "^8.13.3",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
+    "@types/express": "^4.17.25",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.15.2",
+    "@types/node-cron": "^3.0.11",
+    "@types/pg": "^8.11.11",
+    "@types/supertest": "^6.0.3",
+    "jest": "^29.7.0",
+    "supertest": "^7.2.2",
+    "ts-jest": "^29.4.9",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  }
+}
