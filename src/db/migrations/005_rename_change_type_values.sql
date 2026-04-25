@@ -12,14 +12,22 @@
 -- We drop and recreate the CHECK constraint rather than ALTER it because
 -- VARCHAR + CHECK is a string column with a name-based constraint, so the
 -- migration is just two UPDATEs sandwiched between constraint changes.
+--
+-- Note: migrate.ts already wraps every migration file in its own
+-- BEGIN/COMMIT transaction, so we don't add one here. ANALYZE at the end
+-- runs as part of that same transaction (still valid in Postgres).
 
-BEGIN;
+-- 1. Widen the column. The original schema declared VARCHAR(20), but
+-- 'first_observed_in_dataset' is 25 chars and would fail the UPDATE
+-- below with "value too long for type character varying(20)".
+ALTER TABLE route_changes
+    ALTER COLUMN change_type TYPE VARCHAR(40);
 
--- 1. Allow both old and new values during the rewrite window.
+-- 2. Allow both old and new values during the rewrite window.
 ALTER TABLE route_changes
     DROP CONSTRAINT IF EXISTS route_changes_change_type_check;
 
--- 2. Backfill the renamed values.
+-- 3. Backfill the renamed values.
 UPDATE route_changes
    SET change_type = 'first_observed_in_dataset'
  WHERE change_type = 'launch';
@@ -47,8 +55,6 @@ ALTER TABLE route_changes
 UPDATE route_changes
    SET comparison_period = REPLACE(comparison_period, '(launch)', '(first_observed)')
  WHERE comparison_period LIKE '%(launch)%';
-
-COMMIT;
 
 -- Refresh planner stats so the existing partial indexes from migration 004
 -- (which were created over zero matching rows) get correct selectivity.
