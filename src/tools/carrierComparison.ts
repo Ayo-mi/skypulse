@@ -2,7 +2,6 @@ import { z } from 'zod';
 import {
   getRouteChanges,
   getLatestSourceVintage,
-  getLatestAnnouncedDate,
 } from '../db/queries';
 import { getOrSet, buildCacheKey } from '../cache/redis';
 import { buildFreshnessMetadata } from '../utils/freshness';
@@ -44,7 +43,7 @@ export async function frequencyLosers(
   return getOrSet(cacheKey, LEADERBOARD_TTL, async () => {
     logger.info('Executing frequency_losers', { market, period });
 
-    const [changes, latestVintage, latestAnnounce] = await Promise.all([
+    const [changes, latestVintage] = await Promise.all([
       getRouteChanges({
         market,
         change_types: ['reduction', 'suspension', 'gauge_down'],
@@ -54,7 +53,6 @@ export async function frequencyLosers(
         order_dir: 'ASC',
       }),
       getLatestSourceVintage(market ? { market } : {}),
-      getLatestAnnouncedDate(market ? { market } : {}),
     ]);
 
     const losers: FrequencyLoserEntry[] = changes
@@ -69,6 +67,7 @@ export async function frequencyLosers(
         destination: c.destination,
         carrier: c.carrier,
         carrier_name: c.carrier_name ?? undefined,
+        is_unresolved: c.is_unresolved,
         comparison_period: c.comparison_period,
         frequency_change_pct: parseFloat(String(c.frequency_change_pct)),
         frequency_change_abs: c.frequency_change_abs ?? 0,
@@ -93,9 +92,8 @@ export async function frequencyLosers(
       known_unknowns:
         losers.length === 0
           ? 'No frequency reductions found in the requested scope'
-          : 'Rankings based on ingested T-100 data (3–6 month public release lag)',
+          : 'Rankings based on historical BTS T-100 data (3–6 month public release lag)',
       latestDataVintage: latestVintage,
-      latestAnnouncementDate: latestAnnounce,
     });
 
     return {

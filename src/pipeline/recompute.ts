@@ -16,9 +16,14 @@
 //        granularity while producing the market-intel unit OAG/Cirium sell.
 //     3. Compare consecutive aggregate periods with classifyChange(), emitting
 //        one route_changes row per transition.
-//     4. Attach a confidence score based on available evidence, corroborating
-//        announcements within a +/- 45 day window, and source vintage age.
+//     4. Attach a confidence score based on available evidence and source
+//        vintage age.
 //     5. Invalidate relevant cache keys so the next query reflects new data.
+//
+// NOTE: Press-release / announcement corroboration was removed from the
+// pipeline when SkyPulse was reframed as historical T-100 intelligence. The
+// route_announcements table is retained for forward compatibility but no
+// longer queried per row (saves ~1 DB round-trip per change).
 // ─────────────────────────────────────────────────────────────────────────────
 
 import 'dotenv/config';
@@ -175,30 +180,6 @@ function formatVintage(vintage: Date | null): string {
   return `Q${quarter} ${year} (period ${month})`;
 }
 
-/**
- * Look up announcement corroboration for a given route in a +/- 45 day window
- * around the comparison boundary.
- */
-async function hasAnnouncementCorroboration(
-  origin: string,
-  destination: string,
-  carrier: string,
-  comparisonBoundary: Date
-): Promise<boolean> {
-  const rows = await query<{ cnt: string }>(
-    `SELECT COUNT(*)::TEXT AS cnt
-     FROM route_announcements
-     WHERE origin=$1 AND destination=$2 AND carrier=$3
-       AND (
-         (effective_date BETWEEN $4::date - INTERVAL '45 days' AND $4::date + INTERVAL '45 days')
-         OR
-         (announced_date BETWEEN $4::date - INTERVAL '45 days' AND $4::date + INTERVAL '45 days')
-       )`,
-    [origin, destination, carrier, comparisonBoundary]
-  );
-  return Number(rows[0]?.cnt ?? '0') > 0;
-}
-
 interface RecomputeOptions {
   /** Limit recomputation to a single triple (useful in tests). */
   origin?: string;
@@ -262,8 +243,9 @@ export async function recomputeRouteChanges(
 
     if (aggregates.length < 1) continue;
 
-    // Always emit a "launch" row for the earliest observed quarter (or when
-    // prior = zero) and comparison rows for every subsequent quarter.
+    // Always emit a "first_observed_in_dataset" row for the earliest observed
+    // quarter (or when prior = zero) and comparison rows for every subsequent
+    // quarter.
     const emitCount = opts.maxPeriods
       ? Math.min(aggregates.length, opts.maxPeriods)
       : aggregates.length;
@@ -276,7 +258,7 @@ export async function recomputeRouteChanges(
       const comparisonPeriod =
         prior !== null
           ? `${current.period} vs ${prior.period}`
-          : `${current.period} (launch)`;
+          : `${current.period} (first_observed)`;
 
       const classification = classifyChange({
         prior: prior
@@ -286,12 +268,6 @@ export async function recomputeRouteChanges(
       });
 
       const comparisonBoundary = quarterMidpoint(current.period);
-      const announcementCorroboration = await hasAnnouncementCorroboration(
-        t.origin,
-        t.destination,
-        t.carrier,
-        comparisonBoundary
-      );
 
       const dataAgeDays = current.source_vintage
         ? Math.floor(
@@ -302,7 +278,6 @@ export async function recomputeRouteChanges(
       const confidence = computeConfidence({
         changeType: classification.changeType,
         sourceRefs: current.source_refs,
-        hasAnnouncementCorroboration: announcementCorroboration,
         dataAge_days: dataAgeDays,
         hasAircraftMixData:
           Object.keys(current.aircraft_type_mix).length > 0,
@@ -310,18 +285,11 @@ export async function recomputeRouteChanges(
 
       const knownUnknowns = buildKnownUnknowns({
         hasMixData: Object.keys(current.aircraft_type_mix).length > 0,
-        hasAnnouncementData: announcementCorroboration,
         sourceCount: current.source_refs.length,
         dataAge_days: dataAgeDays,
       });
 
       const sourceRefs: SourceRef[] = [...current.source_refs];
-      if (announcementCorroboration) {
-        sourceRefs.push({
-          source: 'Press Release',
-          vintage: 'corroborated (+/- 45d)',
-        });
-      }
 
       await withTransaction(async (client) => {
         await client.query(

@@ -2,7 +2,6 @@ import { z } from 'zod';
 import {
   getRouteChanges,
   getLatestSourceVintage,
-  getLatestAnnouncedDate,
 } from '../db/queries';
 import { getOrSet, buildCacheKey } from '../cache/redis';
 import { buildFreshnessMetadata } from '../utils/freshness';
@@ -68,7 +67,7 @@ export async function capacityDriverAnalysis(
   return getOrSet(cacheKey, DEFAULT_TTL, async () => {
     logger.info('Executing capacity_driver_analysis', { origin, destination, carrier });
 
-    const [changes, latestVintage, latestAnnounce] = await Promise.all([
+    const [changes, latestVintage] = await Promise.all([
       getRouteChanges({
         origin,
         destination,
@@ -78,7 +77,6 @@ export async function capacityDriverAnalysis(
         order_dir: 'DESC',
       }),
       getLatestSourceVintage({ origin, destination, carrier }),
-      getLatestAnnouncedDate({ origin, destination, carrier }),
     ]);
 
     const details: CapacityDriverDetail[] = changes.map((c) => {
@@ -94,6 +92,7 @@ export async function capacityDriverAnalysis(
       return {
         carrier: c.carrier,
         carrier_name: c.carrier_name ?? undefined,
+        is_unresolved: c.is_unresolved,
         comparison_period: c.comparison_period,
         driver: determineDriver(freqPct, capPct),
         frequency_change_pct: freqPct,
@@ -128,9 +127,8 @@ export async function capacityDriverAnalysis(
           ? 'No data found for this route'
           : !hasMix
           ? 'Aircraft mix data missing — gauge analysis may be inaccurate'
-          : 'Coverage limited to ingested T-100 periods (3–6 month public release lag)',
+          : 'Historical BTS T-100 only (3–6 month public release lag)',
       latestDataVintage: latestVintage,
-      latestAnnouncementDate: latestAnnounce,
     });
 
     return {

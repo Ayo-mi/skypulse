@@ -48,10 +48,33 @@ export interface RouteSnapshot {
   ingested_at: Date;
 }
 
+/**
+ * change_type vocabulary.
+ *
+ * SkyPulse derives all change rows from BTS T-100 Segment filings only — there
+ * is no schedule-source or press-release corroboration in the current
+ * pipeline. The enum names therefore deliberately reflect "what we observed
+ * in the dataset", not "what happened in the real world":
+ *
+ *   first_observed_in_dataset
+ *     The earliest quarter we see this carrier flying this route. Could be a
+ *     true launch, OR could simply be the earliest quarter our ingested
+ *     window covers — agents must read `comparison_period` and `data_freshness`
+ *     to disambiguate.
+ *
+ *   re_observed_after_gap
+ *     We previously saw activity, then ≥1 quarter of zero activity, then
+ *     activity again. Could be a true resumption OR a seasonal route OR a
+ *     reporting gap on the carrier's side.
+ *
+ *   suspension / growth / reduction / gauge_up / gauge_down
+ *     Quarter-over-quarter deltas, well-defined once both quarters are in
+ *     the dataset.
+ */
 export type ChangeType =
-  | 'launch'
+  | 'first_observed_in_dataset'
   | 'suspension'
-  | 'resumption'
+  | 're_observed_after_gap'
   | 'growth'
   | 'reduction'
   | 'gauge_up'
@@ -129,6 +152,8 @@ export interface RouteCapacityChangeResult extends FreshnessMetadata {
 export interface RouteChangeDetail {
   carrier: string;
   carrier_name?: string;
+  /** True when the BTS carrier code did not resolve to a known operator. */
+  is_unresolved?: boolean;
   comparison_period: string;
   change_type: ChangeType;
   prior_frequency: number | null;
@@ -154,9 +179,11 @@ export interface NewRouteLaunchesInput {
 export interface NewRouteEntry {
   carrier: string;
   carrier_name?: string;
+  /** True when the BTS carrier code did not resolve to a known operator. */
+  is_unresolved?: boolean;
   origin: string;
   destination: string;
-  change_type: 'launch' | 'resumption';
+  change_type: 'first_observed_in_dataset' | 're_observed_after_gap';
   comparison_period: string;
   current_frequency: number | null;
   current_inferred_seats: number | null;
@@ -181,6 +208,8 @@ export interface FrequencyLoserEntry {
   destination: string;
   carrier: string;
   carrier_name?: string;
+  /** True when the BTS carrier code did not resolve to a known operator. */
+  is_unresolved?: boolean;
   comparison_period: string;
   frequency_change_pct: number;
   frequency_change_abs: number;
@@ -204,6 +233,8 @@ export interface CapacityDriverAnalysisInput {
 export interface CapacityDriverDetail {
   carrier: string;
   carrier_name?: string;
+  /** True when the BTS carrier code did not resolve to a known operator. */
+  is_unresolved?: boolean;
   comparison_period: string;
   driver: 'frequency_driven' | 'gauge_driven' | 'mixed' | 'flat' | 'decline';
   frequency_change_pct: number | null;
@@ -231,6 +262,8 @@ export interface CarrierRankEntry {
   rank: number;
   carrier: string;
   carrier_name?: string;
+  /** True when the BTS carrier code did not resolve to a known operator. */
+  is_unresolved?: boolean;
   total_capacity_change_abs: number;
   total_capacity_change_pct: number;
   total_current_seats: number;

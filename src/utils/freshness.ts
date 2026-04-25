@@ -4,11 +4,16 @@ import { FreshnessMetadata, SourceRef } from '../types/index';
  * Builds the standard freshness metadata block that every tool response must include.
  *
  * `data_freshness` follows the Context Protocol-visible format:
- *   "Source: BTS T-100 vintage <month year> (period <quarter>) + Press Releases through <month year> — as of <iso timestamp>"
+ *   "Source: BTS T-100 vintage <month year> (period <quarter>), 3-6 month BTS publication lag — as of <iso timestamp>"
  *
  * When the tool cannot determine a source vintage (no rows in scope) it falls
  * back to a clearly-labeled "vintage unknown" string so reviewers can't mis-
  * interpret stale responses as fresh.
+ *
+ * NOTE: The press-release / announcement layer was removed from the product
+ * scope when reframing SkyPulse as historical capacity intelligence. The
+ * `latestAnnouncementDate` parameter is retained on the function signature
+ * so callers don't need to be updated, but it is intentionally ignored.
  */
 export function buildFreshnessMetadata(options: {
   as_of?: Date;
@@ -17,22 +22,20 @@ export function buildFreshnessMetadata(options: {
   confidence: number;
   known_unknowns: string;
   latestDataVintage?: Date | null;
+  /** @deprecated Retained for signature compatibility; no longer used. */
   latestAnnouncementDate?: Date | null;
 }): FreshnessMetadata {
   const as_of = options.as_of ?? new Date();
   const t100Label = options.latestDataVintage
     ? formatT100Label(options.latestDataVintage)
     : 'BTS T-100 (no ingested data in scope)';
-  const prLabel = options.latestAnnouncementDate
-    ? `Press Releases through ${monthYear(options.latestAnnouncementDate)}`
-    : 'Press Releases (none ingested in scope)';
   return {
     as_of: as_of.toISOString(),
     comparison_period: options.comparison_period,
     source_refs: dedupeSourceRefs(options.source_refs),
     confidence: options.confidence,
     known_unknowns: options.known_unknowns,
-    data_freshness: `Source: ${t100Label} + ${prLabel} — as of ${as_of.toISOString()}`,
+    data_freshness: `Source: ${t100Label}, 3-6 month BTS publication lag — as of ${as_of.toISOString()}`,
   };
 }
 
@@ -48,7 +51,7 @@ export function buildFreshnessMetadata(options: {
 function formatT100Label(vintage: Date): string {
   const year = vintage.getUTCFullYear();
   const quarter = Math.ceil((vintage.getUTCMonth() + 1) / 3);
-  return `BTS T-100 vintage ${monthYear(vintage)} (period ${year}-Q${quarter})`;
+  return `BTS T-100 Segment vintage ${monthYear(vintage)} (period ${year}-Q${quarter})`;
 }
 
 function monthYear(d: Date): string {

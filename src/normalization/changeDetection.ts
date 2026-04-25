@@ -18,10 +18,16 @@ interface ChangeClassification {
 /**
  * Classify the change between two consecutive route snapshots.
  *
+ * IMPORTANT: SkyPulse is BTS-only. We cannot distinguish a true marketing
+ * launch from "first quarter we happen to have data for", so the enum
+ * names reflect dataset semantics rather than real-world claims:
+ *   - first_observed_in_dataset   (was: launch)
+ *   - re_observed_after_gap       (was: resumption)
+ *
  * Rules (in priority order):
- *  - No prior   → launch
+ *  - No prior   → first_observed_in_dataset
  *  - No current → suspension
- *  - Was zero, now > 0 → resumption
+ *  - Was zero, now > 0 → re_observed_after_gap
  *  - Now zero   → suspension
  *  - Frequency up, seats up proportionally → growth
  *  - Frequency down → reduction
@@ -33,7 +39,7 @@ export function classifyChange(input: ChangeClassificationInput): ChangeClassifi
 
   if (!prior) {
     return {
-      changeType: 'launch',
+      changeType: 'first_observed_in_dataset',
       frequencyChangePct: null,
       capacityChangePct: null,
       frequencyChangeAbs: null,
@@ -68,10 +74,10 @@ export function classifyChange(input: ChangeClassificationInput): ChangeClassifi
   const seatChangePct =
     priorSeats > 0 ? ((currSeats - priorSeats) / priorSeats) * 100 : null;
 
-  // Was suspended (zero freq), now active → resumption
+  // Was at zero (gap quarter), now active → re_observed_after_gap
   if (priorFreq === 0 && currFreq > 0) {
     return {
-      changeType: 'resumption',
+      changeType: 're_observed_after_gap',
       frequencyChangePct: null,
       capacityChangePct: null,
       frequencyChangeAbs: freqChangeAbs,

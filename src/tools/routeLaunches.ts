@@ -2,7 +2,6 @@ import { z } from 'zod';
 import {
   getRouteChanges,
   getLatestSourceVintage,
-  getLatestAnnouncedDate,
 } from '../db/queries';
 import { getOrSet, buildCacheKey } from '../cache/redis';
 import { buildFreshnessMetadata } from '../utils/freshness';
@@ -27,7 +26,10 @@ export const NewRouteLaunchesSchema = z.object({
 
 export type NewRouteLaunchesSchemaType = z.infer<typeof NewRouteLaunchesSchema>;
 
-const DEFAULT_TTL = 3600;
+// 24h TTL — underlying T-100 data refreshes monthly at most, so a stale
+// response is at worst 30-45 minutes behind a fresh one. Longer TTL
+// dramatically lowers cold-call latency for the reviewer's first hit.
+const DEFAULT_TTL = 86_400;
 
 export async function newRouteLaunches(
   input: NewRouteLaunchesInput
@@ -43,25 +45,27 @@ export async function newRouteLaunches(
   return getOrSet(cacheKey, DEFAULT_TTL, async () => {
     logger.info('Executing new_route_launches', { airport, period });
 
-    const [changes, latestVintage, latestAnnounce] = await Promise.all([
+    const [changes, latestVintage] = await Promise.all([
       getRouteChanges({
         market: airport,
-        change_types: ['launch', 'resumption'],
+        change_types: ['first_observed_in_dataset', 're_observed_after_gap'],
         period,
         limit: 100,
         order_by: 'as_of',
         order_dir: 'DESC',
       }),
       getLatestSourceVintage({ market: airport }),
-      getLatestAnnouncedDate({ market: airport }),
     ]);
 
     const routes: NewRouteEntry[] = changes.map((c) => ({
       carrier: c.carrier,
       carrier_name: c.carrier_name ?? undefined,
+      is_unresolved: c.is_unresolved,
       origin: c.origin,
       destination: c.destination,
-      change_type: c.change_type as 'launch' | 'resumption',
+      change_type: c.change_type as
+        | 'first_observed_in_dataset'
+        | 're_observed_after_gap',
       comparison_period: c.comparison_period,
       current_frequency: c.current_frequency,
       current_inferred_seats: c.current_inferred_seats,
@@ -79,16 +83,22 @@ export async function newRouteLaunches(
     const periods = [...new Set(changes.map((c) => c.comparison_period))];
     const comparisonPeriod = periods.join(', ') || 'N/A';
 
+    const unresolvedCount = routes.filter((r) => r.is_unresolved).length;
+    const baseGaps =
+      routes.length === 0
+        ? 'No first_observed or re_observed routes found for this airport/period in the BTS T-100 window'
+        : 'Rows are dataset observations from BTS T-100 only — first_observed_in_dataset is the earliest quarter we have data for the route, NOT a confirmed marketing launch date. effective_date is the BTS quarter midpoint, not the calendar launch day.';
+    const knownUnknowns =
+      unresolvedCount > 0
+        ? `${baseGaps} ${unresolvedCount} of ${routes.length} carrier(s) returned with an unresolved BTS code (typically charter, small cargo, or BTS-internal sub-regional operators); see is_unresolved=true rows.`
+        : baseGaps;
+
     const freshness = buildFreshnessMetadata({
       comparison_period: comparisonPeriod,
       source_refs: allSources.slice(0, 10),
       confidence: Math.round(avgConfidence * 100) / 100,
-      known_unknowns:
-        routes.length === 0
-          ? 'No launches or resumptions found for this airport/period'
-          : 'Launch dates derived from T-100 reporting periods; exact calendar launch day requires press-release corroboration',
+      known_unknowns: knownUnknowns,
       latestDataVintage: latestVintage,
-      latestAnnouncementDate: latestAnnounce,
     });
 
     return {

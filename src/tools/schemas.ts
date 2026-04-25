@@ -54,14 +54,30 @@ const FRESHNESS_PROPERTIES = {
   data_freshness: {
     type: 'string',
     description:
-      'Explicit freshness label in the form "Source: BTS T-100 vintage <month year> (period <quarter>) + Press Releases through <month year> — as of <iso timestamp>".',
+      'Explicit freshness label in the form "Source: BTS T-100 Segment vintage <month year> (period <quarter>), 3-6 month BTS publication lag — as of <iso timestamp>".',
   },
 } as const;
 
+const CARRIER_NAME_SCHEMA = {
+  type: 'string',
+  description:
+    'Human-readable carrier name. Returns "Unresolved (BTS code: <X>)" when the BTS UNIQUE_CARRIER code did not map to a known operator (typically charter, small cargo, or BTS-internal sub-regional codes); see is_unresolved.',
+} as const;
+
+const IS_UNRESOLVED_SCHEMA = {
+  type: 'boolean',
+  description:
+    'True when the BTS carrier code did NOT resolve to a known operator after IATA / DOT-numeric / ICAO normalization. Use to filter out data-quality outliers or to surface them to end users.',
+} as const;
+
+// IMPORTANT: SkyPulse is BTS-only — we cannot distinguish a true marketing
+// launch from "first quarter the dataset covers". The enum names reflect
+// dataset semantics, not real-world claims. See `src/types/index.ts` for
+// the full vocabulary contract.
 const CHANGE_TYPE_ENUM = [
-  'launch',
+  'first_observed_in_dataset',
   'suspension',
-  'resumption',
+  're_observed_after_gap',
   'growth',
   'reduction',
   'gauge_up',
@@ -121,7 +137,8 @@ export const ROUTE_CAPACITY_CHANGE_OUTPUT_SCHEMA = {
         type: 'object',
         properties: {
           carrier: { type: 'string', description: 'IATA carrier code (e.g. "AA").' },
-          carrier_name: { type: 'string', description: 'Human-readable carrier name.' },
+          carrier_name: CARRIER_NAME_SCHEMA,
+          is_unresolved: IS_UNRESOLVED_SCHEMA,
           comparison_period: {
             type: 'string',
             description: 'Comparison window, e.g. "2025-Q3 vs 2025-Q2".',
@@ -130,7 +147,7 @@ export const ROUTE_CAPACITY_CHANGE_OUTPUT_SCHEMA = {
             type: 'string',
             enum: [...CHANGE_TYPE_ENUM],
             description:
-              'Classification of the change: launch / suspension / resumption / growth / reduction / gauge_up / gauge_down.',
+              'Classification of the change. NOTE: first_observed_in_dataset and re_observed_after_gap are dataset observations from BTS T-100 only, NOT confirmed real-world launch dates — they reflect the earliest quarter SkyPulse has data for that route, which may post-date the actual marketing launch. growth/reduction/gauge_up/gauge_down are quarter-over-quarter deltas with both quarters in the dataset.',
           },
           prior_frequency: {
             type: ['integer', 'null'],
@@ -241,7 +258,7 @@ export const NEW_ROUTE_LAUNCHES_INPUT_SCHEMA = {
 export const NEW_ROUTE_LAUNCHES_OUTPUT_SCHEMA = {
   type: 'object',
   description:
-    'New route launches and service resumptions at a given airport over the most recent available periods.',
+    'Routes first observed (or re-observed after a gap) at a given airport in the BTS T-100 dataset. NOTE: these are dataset observations, NOT confirmed real-world launch dates — the actual marketing launch may pre-date the earliest quarter SkyPulse has data for. Use for historical attribution and trend analysis, not for real-time launch tracking.',
   properties: {
     airport: { type: 'string', description: 'Echo of the input airport IATA code.' },
     period: {
@@ -250,18 +267,19 @@ export const NEW_ROUTE_LAUNCHES_OUTPUT_SCHEMA = {
     },
     routes: {
       type: 'array',
-      description: 'One entry per launched or resumed route-carrier combination.',
+      description: 'One entry per first_observed_in_dataset or re_observed_after_gap route-carrier combination.',
       items: {
         type: 'object',
         properties: {
           carrier: { type: 'string', description: 'IATA carrier code.' },
-          carrier_name: { type: 'string', description: 'Human-readable carrier name.' },
+          carrier_name: CARRIER_NAME_SCHEMA,
+          is_unresolved: IS_UNRESOLVED_SCHEMA,
           origin: { type: 'string', description: 'IATA origin airport code.' },
           destination: { type: 'string', description: 'IATA destination airport code.' },
           change_type: {
             type: 'string',
-            enum: ['launch', 'resumption'],
-            description: 'launch = first time observed; resumption = previously suspended service.',
+            enum: ['first_observed_in_dataset', 're_observed_after_gap'],
+            description: 'first_observed_in_dataset = earliest quarter the route appears in our T-100 window (NOT a confirmed marketing launch); re_observed_after_gap = activity resumed after ≥1 quarter of zero T-100 reports (could be a true resumption, a seasonal route, or a reporting gap).',
           },
           comparison_period: {
             type: 'string',
@@ -278,7 +296,7 @@ export const NEW_ROUTE_LAUNCHES_OUTPUT_SCHEMA = {
           effective_date: {
             type: 'string',
             format: 'date-time',
-            description: 'ISO 8601 effective date derived from the source window.',
+            description: 'ISO 8601 timestamp marking the midpoint of the BTS reporting quarter where the route was first/re-observed. This is NOT a confirmed marketing launch date — it is a quarter-midpoint anchor used for ordering and grouping. The true real-world launch may have occurred days, weeks, or months before this date.',
           },
           confidence: { type: 'number', minimum: 0, maximum: 1 },
           source_refs: { type: 'array', items: SOURCE_REF_SCHEMA },
@@ -358,7 +376,8 @@ export const FREQUENCY_LOSERS_OUTPUT_SCHEMA = {
           origin: { type: 'string' },
           destination: { type: 'string' },
           carrier: { type: 'string' },
-          carrier_name: { type: 'string' },
+          carrier_name: CARRIER_NAME_SCHEMA,
+          is_unresolved: IS_UNRESOLVED_SCHEMA,
           comparison_period: { type: 'string' },
           frequency_change_pct: {
             type: 'number',
@@ -447,7 +466,8 @@ export const CAPACITY_DRIVER_ANALYSIS_OUTPUT_SCHEMA = {
         type: 'object',
         properties: {
           carrier: { type: 'string' },
-          carrier_name: { type: 'string' },
+          carrier_name: CARRIER_NAME_SCHEMA,
+          is_unresolved: IS_UNRESOLVED_SCHEMA,
           comparison_period: { type: 'string' },
           driver: {
             type: 'string',
@@ -537,18 +557,19 @@ export const CARRIER_CAPACITY_RANKING_OUTPUT_SCHEMA = {
         properties: {
           rank: { type: 'integer', minimum: 1 },
           carrier: { type: 'string' },
-          carrier_name: { type: 'string' },
+          carrier_name: CARRIER_NAME_SCHEMA,
+          is_unresolved: IS_UNRESOLVED_SCHEMA,
           total_capacity_change_abs: { type: 'integer' },
           total_capacity_change_pct: { type: 'number' },
           total_current_seats: { type: 'integer' },
           total_prior_seats: { type: 'integer' },
           routes_gained: {
             type: 'integer',
-            description: 'Count of launch/resumption/growth/gauge_up rows for the carrier in scope.',
+            description: 'Count of first_observed_in_dataset / re_observed_after_gap / growth / gauge_up rows for the carrier in scope.',
           },
           routes_lost: {
             type: 'integer',
-            description: 'Count of suspension/reduction/gauge_down rows for the carrier in scope.',
+            description: 'Count of suspension / reduction / gauge_down rows for the carrier in scope.',
           },
           routes_unchanged: {
             type: 'integer',

@@ -5,7 +5,27 @@ import { query } from './connection';
 
 export interface RouteChangeWithCarrier extends RouteChange {
   carrier_name: string | null;
+  /** True when the BTS carrier code did not resolve to a known operator. */
+  is_unresolved: boolean;
 }
+
+// ── SQL fragment: resolve carrier name + flag unresolved carriers ───────────
+// Reused by every query that joins route_changes against carriers. The
+// "Unknown (auto)" placeholder is what ensureCarriers() inserts for codes
+// that aren't in the seed; that placeholder is replaced here with a self-
+// describing label and an explicit boolean flag so agents can detect data-
+// quality issues without string-matching the name.
+const CARRIER_SQL_FRAGMENT = `
+  CASE
+    WHEN c.name IS NULL OR c.name = 'Unknown (auto)'
+      THEN 'Unresolved (BTS code: ' || rc.carrier || ')'
+    ELSE c.name
+  END AS carrier_name,
+  CASE
+    WHEN c.name IS NULL OR c.name = 'Unknown (auto)' THEN TRUE
+    ELSE FALSE
+  END AS is_unresolved
+`.trim();
 
 // ── Route snapshots ──────────────────────────────────────────────────────────
 
@@ -158,6 +178,108 @@ export async function getRouteChanges(options: {
   order_by?: string;
   order_dir?: 'ASC' | 'DESC';
 }): Promise<RouteChangeWithCarrier[]> {
+  // Whitelist order_by to prevent SQL injection via user-controlled string.
+  const ORDER_BY_ALLOWED = new Set([
+    'as_of',
+    'comparison_period',
+    'frequency_change_pct',
+    'frequency_change_abs',
+    'capacity_change_pct',
+    'capacity_change_abs',
+    'confidence',
+  ]);
+  const orderBy = ORDER_BY_ALLOWED.has(options.order_by ?? '')
+    ? (options.order_by as string)
+    : 'as_of';
+  const orderDir = options.order_dir === 'ASC' ? 'ASC' : 'DESC';
+  const limit = options.limit ?? 100;
+
+  // ── Hot path: market filter + change_types (powers new_route_launches) ────
+  //
+  // The naive `WHERE (origin=$M OR destination=$M)` plan was costing 38-42s
+  // on Railway because Postgres can't use both partial indexes in a single
+  // bitmap-OR efficiently against a multi-million-row table. Splitting it
+  // into UNION ALL of two indexed scans (one for origin=$M, one for
+  // destination=$M with origin!=$M to avoid double-counting nonstop both-way
+  // hypothetical rows) yields two index-only-style seeks and brings the
+  // common case under 2s warm / under 5s cold.
+  //
+  // The non-market path keeps the original single-WHERE form because it's
+  // already fast (origin and destination indexes work fine alone).
+  if (options.market) {
+    const market = options.market;
+
+    // Build a parameterised filter clause that gets injected on each side of
+    // the UNION. Each side has its own param list so $-numbering stays sane.
+    const buildSideClause = (
+      sideExpr: string,
+      params: unknown[],
+      excludeOriginEqualsMarket: boolean
+    ): string => {
+      const parts: string[] = [sideExpr];
+      if (excludeOriginEqualsMarket) {
+        params.push(market);
+        parts.push(`rc.origin <> $${params.length}`);
+      }
+      if (options.carrier) {
+        params.push(options.carrier);
+        parts.push(`rc.carrier=$${params.length}`);
+      }
+      if (options.change_types && options.change_types.length > 0) {
+        params.push(options.change_types);
+        parts.push(`rc.change_type = ANY($${params.length})`);
+      }
+      if (options.days_back) {
+        params.push(options.days_back);
+        parts.push(`rc.as_of >= NOW() - ($${params.length} || ' days')::INTERVAL`);
+      }
+      if (options.period) {
+        params.push(`${options.period}%`);
+        parts.push(`rc.comparison_period ILIKE $${params.length}`);
+      }
+      return parts.join(' AND ');
+    };
+
+    const originParams: unknown[] = [market];
+    const originWhere = buildSideClause('rc.origin=$1', originParams, false);
+
+    const destParams: unknown[] = [market];
+    const destWhere = buildSideClause('rc.destination=$1', destParams, true);
+
+    // Renumber destination-side placeholders so they don't collide with origin
+    // when concatenated. We append all destination params after origin params,
+    // shifting every $N reference in destWhere by originParams.length.
+    const offset = originParams.length;
+    const destWhereShifted = destWhere.replace(/\$(\d+)/g, (_, n) =>
+      `$${parseInt(n, 10) + offset}`
+    );
+
+    const allParams = [...originParams, ...destParams];
+    allParams.push(limit);
+    const limitParam = `$${allParams.length}`;
+
+    const sql = `
+      WITH combined AS (
+        SELECT rc.*
+        FROM route_changes rc
+        WHERE ${originWhere}
+        UNION ALL
+        SELECT rc.*
+        FROM route_changes rc
+        WHERE ${destWhereShifted}
+      )
+      SELECT rc.*,
+             ${CARRIER_SQL_FRAGMENT}
+      FROM combined rc
+      LEFT JOIN carriers c ON c.iata_code = rc.carrier
+      ORDER BY rc.${orderBy} ${orderDir} NULLS LAST, rc.as_of DESC
+      LIMIT ${limitParam}
+    `;
+
+    return query<RouteChangeWithCarrier>(sql, allParams);
+  }
+
+  // ── Standard path: no market filter ──────────────────────────────────────
   const params: unknown[] = [];
   const conditions: string[] = [];
 
@@ -182,46 +304,17 @@ export async function getRouteChanges(options: {
     conditions.push(`rc.as_of >= NOW() - ($${params.length} || ' days')::INTERVAL`);
   }
   if (options.period) {
-    // comparison_period always starts with the current-quarter label, so a
-    // prefix match avoids over-counting when a prior quarter coincidentally
-    // contains the same substring (e.g. "2025-Q1 vs 2024-Q1" under "2024-Q1").
     params.push(`${options.period}%`);
     conditions.push(`rc.comparison_period ILIKE $${params.length}`);
-  }
-  if (options.market) {
-    params.push(options.market);
-    conditions.push(
-      `(rc.origin=$${params.length} OR rc.destination=$${params.length})`
-    );
   }
 
   const where =
     conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
-  // Whitelist order_by to prevent SQL injection via user-controlled string.
-  const ORDER_BY_ALLOWED = new Set([
-    'as_of',
-    'comparison_period',
-    'frequency_change_pct',
-    'frequency_change_abs',
-    'capacity_change_pct',
-    'capacity_change_abs',
-    'confidence',
-  ]);
-  const orderBy = ORDER_BY_ALLOWED.has(options.order_by ?? '')
-    ? (options.order_by as string)
-    : 'as_of';
-  const orderDir = options.order_dir === 'ASC' ? 'ASC' : 'DESC';
-  const limit = options.limit ?? 100;
   params.push(limit);
 
-  // NULL out the `Unknown (auto)` placeholder from ensureCarriers() so the
-  // string never leaks into agent-visible responses. The raw carrier IATA
-  // code is always available, and downstream synthesis handles NULL names
-  // gracefully.
   const sql = `
     SELECT rc.*,
-           CASE WHEN c.name = 'Unknown (auto)' THEN NULL ELSE c.name END AS carrier_name
+           ${CARRIER_SQL_FRAGMENT}
     FROM route_changes rc
     LEFT JOIN carriers c ON c.iata_code = rc.carrier
     ${where}
@@ -250,6 +343,7 @@ export async function getCarrierCapacityAggregates(options: {
   {
     carrier: string;
     carrier_name: string | null;
+    is_unresolved: boolean;
     total_capacity_change_abs: number;
     total_capacity_change_pct: number;
     total_current_seats: number;
@@ -285,10 +379,28 @@ export async function getCarrierCapacityAggregates(options: {
   const limit = options.limit ?? 50;
   params.push(limit);
 
+  // Same UNION-ALL trick as getRouteChanges: replace the bitmap-OR
+  // (origin=$1 OR destination=$1) with two indexed scans. The destination
+  // side adds `origin <> $1` to avoid double-counting any hypothetical
+  // self-loop rows. We can reuse the already-numbered $1, etc. because
+  // every condition above the UNION applies identically to both sides.
   const sql = `
+    WITH combined AS (
+      SELECT rc.*
+      FROM route_changes rc
+      WHERE rc.origin=$1
+        ${aircraftFilter}
+        ${periodCondition}
+      UNION ALL
+      SELECT rc.*
+      FROM route_changes rc
+      WHERE rc.destination=$1 AND rc.origin <> $1
+        ${aircraftFilter}
+        ${periodCondition}
+    )
     SELECT
       rc.carrier,
-      CASE WHEN c.name = 'Unknown (auto)' THEN NULL ELSE c.name END AS carrier_name,
+      ${CARRIER_SQL_FRAGMENT},
       COALESCE(SUM(rc.capacity_change_abs), 0)::INTEGER                     AS total_capacity_change_abs,
       COALESCE(
         CASE WHEN SUM(rc.prior_inferred_seats) > 0
@@ -297,18 +409,15 @@ export async function getCarrierCapacityAggregates(options: {
         END, 0)::NUMERIC(8,2)                                               AS total_capacity_change_pct,
       COALESCE(SUM(rc.current_inferred_seats), 0)::INTEGER                  AS total_current_seats,
       COALESCE(SUM(rc.prior_inferred_seats), 0)::INTEGER                    AS total_prior_seats,
-      COUNT(*) FILTER (WHERE rc.change_type IN ('launch','resumption','growth','gauge_up'))::INTEGER AS routes_gained,
+      COUNT(*) FILTER (WHERE rc.change_type IN ('first_observed_in_dataset','re_observed_after_gap','growth','gauge_up'))::INTEGER AS routes_gained,
       COUNT(*) FILTER (WHERE rc.change_type IN ('suspension','reduction','gauge_down'))::INTEGER     AS routes_lost,
       COUNT(*) FILTER (
         WHERE ABS(COALESCE(rc.frequency_change_pct, 0)) < 5
           AND ABS(COALESCE(rc.capacity_change_pct, 0)) < 5
-          AND rc.change_type NOT IN ('launch','resumption','suspension')
+          AND rc.change_type NOT IN ('first_observed_in_dataset','re_observed_after_gap','suspension')
       )::INTEGER                                                            AS routes_unchanged
-    FROM route_changes rc
+    FROM combined rc
     LEFT JOIN carriers c ON c.iata_code = rc.carrier
-    WHERE (rc.origin=$1 OR rc.destination=$1)
-      ${aircraftFilter}
-      ${periodCondition}
     GROUP BY rc.carrier, c.name
     ORDER BY total_capacity_change_abs DESC
     LIMIT $${params.length}
@@ -357,8 +466,9 @@ export async function getLatestSourceVintage(options: {
 }
 
 /**
- * Fetch the most recent announced_date for a query scope (for the freshness
- * label: "Press Releases through <month year>").
+ * @deprecated Press-release / announcement layer was removed from product
+ * scope when reframing SkyPulse as historical capacity intelligence. Retained
+ * only to avoid breaking external callers; new code should not call this.
  */
 export async function getLatestAnnouncedDate(options: {
   origin?: string;

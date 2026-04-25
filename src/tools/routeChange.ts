@@ -2,7 +2,6 @@ import { z } from 'zod';
 import {
   getRouteChanges,
   getLatestSourceVintage,
-  getLatestAnnouncedDate,
 } from '../db/queries';
 import { getOrSet, buildCacheKey } from '../cache/redis';
 import { buildFreshnessMetadata } from '../utils/freshness';
@@ -49,7 +48,7 @@ export async function routeCapacityChange(
   return getOrSet(cacheKey, DEFAULT_TTL, async () => {
     logger.info('Executing route_capacity_change', { origin, destination, daysBack });
 
-    const [changes, latestVintage, latestAnnounce] = await Promise.all([
+    const [changes, latestVintage] = await Promise.all([
       getRouteChanges({
         origin,
         destination,
@@ -59,12 +58,12 @@ export async function routeCapacityChange(
         order_dir: 'DESC',
       }),
       getLatestSourceVintage({ origin, destination }),
-      getLatestAnnouncedDate({ origin, destination }),
     ]);
 
     const details: RouteChangeDetail[] = changes.map((c) => ({
       carrier: c.carrier,
       carrier_name: c.carrier_name ?? undefined,
+      is_unresolved: c.is_unresolved,
       comparison_period: c.comparison_period,
       change_type: c.change_type,
       prior_frequency: c.prior_frequency,
@@ -98,16 +97,22 @@ export async function routeCapacityChange(
     const comparisonPeriod =
       periods.length > 0 ? [...new Set(periods)].join(', ') : 'N/A';
 
+    const unresolvedCount = details.filter((d) => d.is_unresolved).length;
+    const baseGaps =
+      details.length === 0
+        ? 'No route-change data found for this origin/destination in the requested window'
+        : 'Historical BTS T-100 only (3–6 month public release lag). first_observed_in_dataset rows reflect the earliest BTS quarter the route appears in our window — not a confirmed marketing launch date.';
+    const knownUnknowns =
+      unresolvedCount > 0
+        ? `${baseGaps} ${unresolvedCount} of ${details.length} carrier(s) returned with an unresolved BTS code (typically charter, small cargo, or BTS-internal sub-regional operators); see is_unresolved=true rows.`
+        : baseGaps;
+
     const freshness = buildFreshnessMetadata({
       comparison_period: comparisonPeriod,
       source_refs: allSources.slice(0, 10),
       confidence: Math.round(avgConfidence * 100) / 100,
-      known_unknowns:
-        details.length === 0
-          ? 'No route-change data found for this origin/destination in the requested window'
-          : 'Coverage limited to ingested T-100 periods (3–6 month public release lag)',
+      known_unknowns: knownUnknowns,
       latestDataVintage: latestVintage,
-      latestAnnouncementDate: latestAnnounce,
     });
 
     return {

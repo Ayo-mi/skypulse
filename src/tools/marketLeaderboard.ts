@@ -2,7 +2,6 @@ import { z } from 'zod';
 import {
   getCarrierCapacityAggregates,
   getLatestSourceVintage,
-  getLatestAnnouncedDate,
 } from '../db/queries';
 import { getOrSet, buildCacheKey } from '../cache/redis';
 import { buildFreshnessMetadata } from '../utils/freshness';
@@ -54,7 +53,7 @@ export async function carrierCapacityRanking(
       period,
     });
 
-    const [aggregates, latestVintage, latestAnnounce] = await Promise.all([
+    const [aggregates, latestVintage] = await Promise.all([
       getCarrierCapacityAggregates({
         market,
         aircraft_category: aircraftCategory,
@@ -62,13 +61,13 @@ export async function carrierCapacityRanking(
         limit: 50,
       }),
       getLatestSourceVintage({ market }),
-      getLatestAnnouncedDate({ market }),
     ]);
 
     const ranking: CarrierRankEntry[] = aggregates.map((agg, index) => ({
       rank: index + 1,
       carrier: agg.carrier,
       carrier_name: agg.carrier_name ?? undefined,
+      is_unresolved: agg.is_unresolved,
       total_capacity_change_abs: Number(agg.total_capacity_change_abs),
       total_capacity_change_pct: Number(agg.total_capacity_change_pct),
       total_current_seats: Number(agg.total_current_seats),
@@ -105,9 +104,8 @@ export async function carrierCapacityRanking(
       known_unknowns:
         ranking.length === 0
           ? 'No carrier capacity data found for this market/filter'
-          : 'Rankings aggregated from T-100 data (3–6 month public release lag). Codeshare allocation not fully attributed.',
+          : 'Rankings aggregated from BTS T-100 historical data (3–6 month public release lag). Codeshare allocation not fully attributed. Some carriers may appear with the IATA code only when the BTS code does not resolve to a known operator.',
       latestDataVintage: latestVintage,
-      latestAnnouncementDate: latestAnnounce,
     });
 
     return {
