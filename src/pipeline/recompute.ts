@@ -36,6 +36,7 @@ import {
 } from '../normalization/confidenceScoring';
 import { logger } from '../utils/logger';
 import { RouteSnapshot, SourceRef } from '../types/index';
+import { getAircraftCategory } from '../normalization/aircraftTypes';
 
 type PeriodType = 'monthly' | 'quarterly';
 
@@ -291,6 +292,13 @@ export async function recomputeRouteChanges(
 
       const sourceRefs: SourceRef[] = [...current.source_refs];
 
+      // Pre-compute the dominant aircraft category once at insertion time
+      // so the carrier_capacity_ranking hot path doesn't need a per-row
+      // JSONB-expansion subquery. See migration 006.
+      const dominantAircraftCategory = pickDominantCategory(
+        current.aircraft_type_mix
+      );
+
       await withTransaction(async (client) => {
         await client.query(
           `DELETE FROM route_changes
@@ -302,9 +310,9 @@ export async function recomputeRouteChanges(
              (origin, destination, carrier, comparison_period,
               prior_frequency, current_frequency, frequency_change_abs, frequency_change_pct,
               prior_inferred_seats, current_inferred_seats, capacity_change_abs, capacity_change_pct,
-              aircraft_type_mix_prior, aircraft_type_mix_current,
+              aircraft_type_mix_prior, aircraft_type_mix_current, dominant_aircraft_category,
               change_type, as_of, confidence, known_unknowns, source_refs)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
           [
             t.origin,
             t.destination,
@@ -320,6 +328,7 @@ export async function recomputeRouteChanges(
             classification.capacityChangePct,
             prior ? JSON.stringify(prior.aircraft_type_mix) : null,
             JSON.stringify(current.aircraft_type_mix),
+            dominantAircraftCategory,
             classification.changeType,
             comparisonBoundary,
             confidence,
@@ -367,6 +376,27 @@ function aggregateToSnapshot(agg: AggregateSnapshot): RouteSnapshot {
     source_vintage: agg.source_vintage,
     ingested_at: new Date(),
   };
+}
+
+/**
+ * Return the category of the aircraft type that operated the most
+ * departures in the given mix. Mirrors the SQL subquery used by
+ * migration 006's backfill so newly written rows match the existing
+ * column values byte-for-byte.
+ */
+function pickDominantCategory(
+  mix: Record<string, number>
+): string | null {
+  let topCode: string | null = null;
+  let topCount = -1;
+  for (const [code, count] of Object.entries(mix)) {
+    if (count > topCount) {
+      topCount = count;
+      topCode = code;
+    }
+  }
+  if (topCode === null) return null;
+  return getAircraftCategory(topCode);
 }
 
 function quarterMidpoint(quarter: string): Date {

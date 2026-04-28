@@ -246,6 +246,7 @@ const CARRIERS: [string, string, string, string, string][] = [
   ['DY', 'NOZ', 'Norwegian Air Shuttle', 'NO', 'lowcost'],
   ['BY', 'TOM', 'TUI Airways', 'GB', 'lowcost'],
   ['AY', 'FIN', 'Finnair', 'FI', 'mainline'],
+  ['FI', 'ICE', 'Icelandair', 'IS', 'mainline'],
   ['AT', 'RAM', 'Royal Air Maroc', 'MA', 'mainline'],
   ['SU', 'AFL', 'Aeroflot', 'RU', 'mainline'],
   ['MS', 'MSR', 'EgyptAir', 'EG', 'mainline'],

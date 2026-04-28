@@ -575,6 +575,29 @@ export const CARRIER_CAPACITY_RANKING_OUTPUT_SCHEMA = {
             type: 'integer',
             description: 'Count of rows where |freq change| < 5% and |capacity change| < 5%.',
           },
+          top_routes: {
+            type: 'array',
+            description:
+              'Up to 3 routes that contributed most to this carrier\'s capacity change in the analysis window, ordered by signed capacity_change_abs DESC. Use these directly to answer "which routes drove the gain?" — no follow-up call to new_route_launches is needed.',
+            items: {
+              type: 'object',
+              properties: {
+                origin: { type: 'string', minLength: 3, maxLength: 3 },
+                destination: { type: 'string', minLength: 3, maxLength: 3 },
+                capacity_change_abs: { type: 'integer' },
+                change_type: { type: 'string' },
+                comparison_period: { type: 'string' },
+              },
+              required: [
+                'origin',
+                'destination',
+                'capacity_change_abs',
+                'change_type',
+                'comparison_period',
+              ],
+              additionalProperties: false,
+            },
+          },
         },
         required: [
           'rank',
@@ -586,6 +609,7 @@ export const CARRIER_CAPACITY_RANKING_OUTPUT_SCHEMA = {
           'routes_gained',
           'routes_lost',
           'routes_unchanged',
+          'top_routes',
         ],
         additionalProperties: false,
       },

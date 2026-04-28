@@ -75,6 +75,16 @@ export async function carrierCapacityRanking(
       routes_gained: Number(agg.routes_gained),
       routes_lost: Number(agg.routes_lost),
       routes_unchanged: Number(agg.routes_unchanged),
+      // top_routes is JSON-decoded server-side by node-pg. Coerce numbers
+      // because Postgres returns capacity_change_abs as a string when the
+      // value comes through json_agg.
+      top_routes: (agg.top_routes ?? []).map((r) => ({
+        origin: r.origin,
+        destination: r.destination,
+        capacity_change_abs: Number(r.capacity_change_abs),
+        change_type: r.change_type,
+        comparison_period: r.comparison_period,
+      })),
     }));
 
     // Confidence is derived from the data we actually have: more carriers in

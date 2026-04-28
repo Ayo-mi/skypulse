@@ -258,6 +258,14 @@ export interface CarrierCapacityRankingInput {
   period?: string;
 }
 
+export interface CarrierTopRouteEntry {
+  origin: string;
+  destination: string;
+  capacity_change_abs: number;
+  change_type: string;
+  comparison_period: string;
+}
+
 export interface CarrierRankEntry {
   rank: number;
   carrier: string;
@@ -271,6 +279,15 @@ export interface CarrierRankEntry {
   routes_gained: number;
   routes_lost: number;
   routes_unchanged: number;
+  /**
+   * Up to 3 routes that contributed most to this carrier's capacity change
+   * in the analysis window. Ordered by signed capacity_change_abs DESC so
+   * the biggest positive contributors appear first for "gainers" queries.
+   *
+   * Bundling these inline removes the need for agents to make a follow-up
+   * call to new_route_launches just to find which routes drove the ranking.
+   */
+  top_routes: CarrierTopRouteEntry[];
 }
 
 export interface CarrierCapacityRankingResult extends FreshnessMetadata {

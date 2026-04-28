@@ -271,6 +271,22 @@ describe('carrier_capacity_ranking', () => {
           routes_gained: 8,
           routes_lost: 3,
           routes_unchanged: 42,
+          top_routes: [
+            {
+              origin: 'DFW',
+              destination: 'LGA',
+              capacity_change_abs: 5400,
+              change_type: 'gauge_up',
+              comparison_period: '2025-Q3 vs 2025-Q2',
+            },
+            {
+              origin: 'DFW',
+              destination: 'BOS',
+              capacity_change_abs: 3600,
+              change_type: 'growth',
+              comparison_period: '2025-Q3 vs 2025-Q2',
+            },
+          ],
         },
       ],
       as_of: '2026-04-22T00:00:00.000Z',

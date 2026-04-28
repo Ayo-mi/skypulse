@@ -33,7 +33,7 @@ Tools
 - `new_route_launches` — first-observed and re-observed-after-gap routes at a given airport in the BTS T-100 dataset. NOT a real-time launch feed — see "Agent tips". Supports `period` quarterly filter.
 - `frequency_losers` — top N routes by steepest historical frequency decline. Optional market filter.
 - `capacity_driver_analysis` — classifies historical capacity change on a route as frequency-driven, gauge-driven, or mixed, with aircraft-mix evidence.
-- `carrier_capacity_ranking` — carrier leaderboard for a market, ranked by absolute seat-capacity change. Supports `aircraft_category` (narrowbody / widebody / regional_jet / turboprop) and `period`.
+- `carrier_capacity_ranking` — carrier leaderboard for a market, ranked by absolute seat-capacity change. Each ranked carrier includes a `top_routes` array (up to 3 routes that drove their ranking), so a single call answers both "who?" and "which routes?". Supports `aircraft_category` (narrowbody / widebody / regional_jet / turboprop) and `period`.
 
 Try asking
 
@@ -55,6 +55,7 @@ Agent tips
 - Every tool response includes `confidence` and `known_unknowns` — low confidence means partial vintage coverage, missing aircraft mix, or unmapped carrier codes; surface these to end users rather than silencing them.
 - `structuredContent` mirrors the schema-typed payload exactly; prefer it over parsing `content[0].text`.
 - Carriers whose BTS code does not resolve to a known operator are returned as `carrier_name: "Unresolved (BTS code: <X>)"` with `is_unresolved: true` — typically charter, small-cargo, or BTS-internal codes. The raw IATA code is always populated.
+- **Each tool answers its workflow in a single call** — agents should not chain SkyPulse tools for the same workflow. `carrier_capacity_ranking` already includes `top_routes` per carrier, `capacity_driver_analysis` already includes the underlying frequency / capacity numbers, and `frequency_losers` already includes carrier names and percentage deltas. For both directions of a route, query each direction once.
 
 Caveats
 
