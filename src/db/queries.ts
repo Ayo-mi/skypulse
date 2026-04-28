@@ -417,12 +417,16 @@ export async function getCarrierCapacityAggregates(options: {
   // side adds `origin <> $1` to avoid double-counting any hypothetical
   // self-loop rows.
   //
-  // The `top_routes` per-carrier subquery uses a window function to pick
-  // the 3 most-impactful routes (signed DESC so positive gains rise to top
-  // for "gainers" queries). Bundling these inline removes the need for
-  // agents to make a follow-up call to new_route_launches just to learn
-  // which routes drove the carrier's ranking — directly addressing the
-  // 2-call pattern the reviewer flagged for "MIA narrowbody gainers".
+  // The query is structured as four sequential CTEs:
+  //   1. combined          — UNION ALL of origin/destination scans
+  //   2. ranked_routes     — window-numbered routes per carrier
+  //   3. top_routes_pc     — json_agg of top 3 routes per carrier
+  //   4. aggregated        — per-carrier sums and counts
+  // The final SELECT joins (3) and (4) without any GROUP BY in the outer
+  // query, so the json column from (3) is never an aggregation key.
+  // (PostgreSQL `json` has no equality operator; the previous version
+  // GROUP BY'd on it and failed with "could not identify an equality
+  // operator for type json".)
   const sql = `
     WITH combined AS (
       SELECT rc.*
@@ -447,7 +451,7 @@ export async function getCarrierCapacityAggregates(options: {
              ) AS rn
       FROM combined
     ),
-    top_routes_per_carrier AS (
+    top_routes_pc AS (
       SELECT carrier,
              json_agg(
                json_build_object(
@@ -460,31 +464,51 @@ export async function getCarrierCapacityAggregates(options: {
              ) FILTER (WHERE rn <= 3) AS top_routes
       FROM ranked_routes
       GROUP BY carrier
+    ),
+    aggregated AS (
+      SELECT
+        rc.carrier,
+        COALESCE(SUM(rc.capacity_change_abs), 0)::INTEGER AS total_capacity_change_abs,
+        COALESCE(
+          CASE WHEN SUM(rc.prior_inferred_seats) > 0
+               THEN SUM(rc.capacity_change_abs)::NUMERIC / SUM(rc.prior_inferred_seats) * 100
+               ELSE 0
+          END, 0)::NUMERIC(8,2)                              AS total_capacity_change_pct,
+        COALESCE(SUM(rc.current_inferred_seats), 0)::INTEGER AS total_current_seats,
+        COALESCE(SUM(rc.prior_inferred_seats), 0)::INTEGER   AS total_prior_seats,
+        COUNT(*) FILTER (WHERE rc.change_type IN ('first_observed_in_dataset','re_observed_after_gap','growth','gauge_up'))::INTEGER AS routes_gained,
+        COUNT(*) FILTER (WHERE rc.change_type IN ('suspension','reduction','gauge_down'))::INTEGER AS routes_lost,
+        COUNT(*) FILTER (
+          WHERE ABS(COALESCE(rc.frequency_change_pct, 0)) < 5
+            AND ABS(COALESCE(rc.capacity_change_pct, 0)) < 5
+            AND rc.change_type NOT IN ('first_observed_in_dataset','re_observed_after_gap','suspension')
+        )::INTEGER                                           AS routes_unchanged
+      FROM combined rc
+      GROUP BY rc.carrier
     )
     SELECT
-      rc.carrier,
-      ${CARRIER_SQL_FRAGMENT},
-      COALESCE(SUM(rc.capacity_change_abs), 0)::INTEGER                     AS total_capacity_change_abs,
-      COALESCE(
-        CASE WHEN SUM(rc.prior_inferred_seats) > 0
-             THEN SUM(rc.capacity_change_abs)::NUMERIC / SUM(rc.prior_inferred_seats) * 100
-             ELSE 0
-        END, 0)::NUMERIC(8,2)                                               AS total_capacity_change_pct,
-      COALESCE(SUM(rc.current_inferred_seats), 0)::INTEGER                  AS total_current_seats,
-      COALESCE(SUM(rc.prior_inferred_seats), 0)::INTEGER                    AS total_prior_seats,
-      COUNT(*) FILTER (WHERE rc.change_type IN ('first_observed_in_dataset','re_observed_after_gap','growth','gauge_up'))::INTEGER AS routes_gained,
-      COUNT(*) FILTER (WHERE rc.change_type IN ('suspension','reduction','gauge_down'))::INTEGER     AS routes_lost,
-      COUNT(*) FILTER (
-        WHERE ABS(COALESCE(rc.frequency_change_pct, 0)) < 5
-          AND ABS(COALESCE(rc.capacity_change_pct, 0)) < 5
-          AND rc.change_type NOT IN ('first_observed_in_dataset','re_observed_after_gap','suspension')
-      )::INTEGER                                                            AS routes_unchanged,
-      COALESCE(tr.top_routes, '[]'::json)                                   AS top_routes
-    FROM combined rc
-    LEFT JOIN carriers c ON c.iata_code = rc.carrier
-    LEFT JOIN top_routes_per_carrier tr ON tr.carrier = rc.carrier
-    GROUP BY rc.carrier, c.name, tr.top_routes
-    ORDER BY total_capacity_change_abs DESC
+      agg.carrier,
+      CASE
+        WHEN c.name IS NULL OR c.name = 'Unknown (auto)'
+          THEN 'Unresolved (BTS code: ' || agg.carrier || ')'
+        ELSE c.name
+      END                                       AS carrier_name,
+      CASE
+        WHEN c.name IS NULL OR c.name = 'Unknown (auto)' THEN TRUE
+        ELSE FALSE
+      END                                       AS is_unresolved,
+      agg.total_capacity_change_abs,
+      agg.total_capacity_change_pct,
+      agg.total_current_seats,
+      agg.total_prior_seats,
+      agg.routes_gained,
+      agg.routes_lost,
+      agg.routes_unchanged,
+      COALESCE(tr.top_routes, '[]'::json)        AS top_routes
+    FROM aggregated agg
+    LEFT JOIN carriers c     ON c.iata_code = agg.carrier
+    LEFT JOIN top_routes_pc tr ON tr.carrier = agg.carrier
+    ORDER BY agg.total_capacity_change_abs DESC
     LIMIT $${params.length}
   `;
 
