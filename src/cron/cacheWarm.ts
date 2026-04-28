@@ -87,11 +87,23 @@ export async function warmCacheForTopAirports(): Promise<WarmSummary> {
 
   let succeeded = 0;
   let failed = 0;
+  // Log only the first few failure messages inline so we can diagnose
+  // without flooding Railway logs. Subsequent failures are summarised.
+  let inlineFailureLogged = 0;
   for (const r of results) {
     if (r.ok) succeeded++;
     else {
       failed++;
-      logger.warn('Cache warm task failed', { error: String(r.error) });
+      const errMsg =
+        r.error instanceof Error ? r.error.stack ?? r.error.message : String(r.error);
+      if (inlineFailureLogged < 3) {
+        // Use error level + put the message in the headline so Railway's
+        // log viewer can't strip the meta block.
+        logger.error(`Cache warm task failed: ${errMsg.slice(0, 500)}`);
+        inlineFailureLogged++;
+      } else {
+        logger.warn('Cache warm task failed', { error: errMsg.slice(0, 200) });
+      }
     }
   }
 

@@ -271,13 +271,22 @@ export async function getRouteChanges(options: {
     allParams.push(limit);
     const finalLimitParam = `$${allParams.length}`;
 
+    // Build an ORDER BY clause without duplicating `as_of DESC` when the
+    // primary order_by IS as_of (the default for new_route_launches). The
+    // duplicate `as_of` from the previous version was a no-op for Postgres
+    // but read like a bug.
+    const innerOrderBy =
+      orderBy === 'as_of'
+        ? `rc.as_of ${orderDir} NULLS LAST`
+        : `rc.${orderBy} ${orderDir} NULLS LAST, rc.as_of DESC`;
+
     const sql = `
       WITH combined AS (
         (
           SELECT rc.*
           FROM route_changes rc
           WHERE ${originWhere}
-          ORDER BY rc.${orderBy} ${orderDir} NULLS LAST, rc.as_of DESC
+          ORDER BY ${innerOrderBy}
           LIMIT ${originLimitParam}
         )
         UNION ALL
@@ -285,7 +294,7 @@ export async function getRouteChanges(options: {
           SELECT rc.*
           FROM route_changes rc
           WHERE ${destWhereShifted}
-          ORDER BY rc.${orderBy} ${orderDir} NULLS LAST, rc.as_of DESC
+          ORDER BY ${innerOrderBy}
           LIMIT ${destLimitShifted}
         )
       )
@@ -293,7 +302,7 @@ export async function getRouteChanges(options: {
              ${CARRIER_SQL_FRAGMENT}
       FROM combined rc
       LEFT JOIN carriers c ON c.iata_code = rc.carrier
-      ORDER BY rc.${orderBy} ${orderDir} NULLS LAST, rc.as_of DESC
+      ORDER BY ${innerOrderBy}
       LIMIT ${finalLimitParam}
     `;
 
