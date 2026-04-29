@@ -14,6 +14,7 @@
     "recompute": "ts-node src/pipeline/recompute.ts",
     "fixture:t100": "ts-node scripts/generateSampleT100.ts",
     "clean:fixture": "ts-node scripts/cleanFixtureData.ts",
+    "smoke": "ts-node scripts/smokeTest.ts",
     "test": "jest",
     "test:schemas": "jest tests/schemas.test.ts",
     "typecheck": "tsc --noEmit"
