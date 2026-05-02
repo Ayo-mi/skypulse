@@ -76,20 +76,63 @@ async function main(): Promise<void> {
     res: Response,
     body?: unknown
   ): Promise<void> => {
+    // Per-request timing so we can pinpoint any non-SQL latency on the
+    // live HTTP endpoint. Each phase is logged with the elapsed_ms since
+    // the request was received. Reviewer feedback flagged 50+ s response
+    // times that don't reproduce in direct-DB benchmarks — these timings
+    // tell us whether time is being spent in transport setup, handler
+    // dispatch, or the response write.
+    const reqStart = Date.now();
+    const reqMethod =
+      typeof body === 'object' && body !== null && 'method' in body
+        ? String((body as { method: unknown }).method)
+        : req.method;
+    const toolName =
+      typeof body === 'object' &&
+      body !== null &&
+      'params' in body &&
+      typeof (body as { params: unknown }).params === 'object' &&
+      (body as { params: { name?: unknown } }).params !== null
+        ? String((body as { params: { name?: unknown } }).params.name ?? '')
+        : '';
+
     const mcpServer = createServer();
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
     });
+    const setupMs = Date.now() - reqStart;
+
     res.on('close', () => {
       transport.close().catch(() => undefined);
       mcpServer.close().catch(() => undefined);
+      logger.info('mcp request closed', {
+        method: reqMethod,
+        tool: toolName || undefined,
+        setup_ms: setupMs,
+        total_ms: Date.now() - reqStart,
+      });
     });
     try {
       await mcpServer.connect(transport);
+      const connectMs = Date.now() - reqStart;
       await transport.handleRequest(req, res, body);
+      const handleMs = Date.now() - reqStart;
+      // Logged in addition to the on('close') line because some clients
+      // (Context's gateway) may keep the connection open long after the
+      // body has been written; this gives us the true server processing
+      // time.
+      logger.info('mcp request handled', {
+        method: reqMethod,
+        tool: toolName || undefined,
+        setup_ms: setupMs,
+        connect_ms: connectMs,
+        handle_ms: handleMs,
+      });
     } catch (err) {
       logger.error('mcp transport error', {
-        method: req.method,
+        method: reqMethod,
+        tool: toolName || undefined,
+        elapsed_ms: Date.now() - reqStart,
         error: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       });

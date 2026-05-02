@@ -239,8 +239,11 @@ export async function getRouteChanges(options: {
         parts.push(`rc.as_of >= NOW() - ($${params.length} || ' days')::INTERVAL`);
       }
       if (options.period) {
-        params.push(`${options.period}%`);
-        parts.push(`rc.comparison_period ILIKE $${params.length}`);
+        // LIKE (not ILIKE) so the text_pattern_ops index from migration 003
+        // can actually be used. comparison_period is always upper-case
+        // ("2025-Q3 vs 2025-Q2"), so case-insensitivity is unnecessary.
+        params.push(`${options.period.toUpperCase()}%`);
+        parts.push(`rc.comparison_period LIKE $${params.length}`);
       }
       return parts.join(' AND ');
     };
@@ -334,8 +337,8 @@ export async function getRouteChanges(options: {
     conditions.push(`rc.as_of >= NOW() - ($${params.length} || ' days')::INTERVAL`);
   }
   if (options.period) {
-    params.push(`${options.period}%`);
-    conditions.push(`rc.comparison_period ILIKE $${params.length}`);
+    params.push(`${options.period.toUpperCase()}%`);
+    conditions.push(`rc.comparison_period LIKE $${params.length}`);
   }
 
   const where =
@@ -404,8 +407,8 @@ export async function getCarrierCapacityAggregates(options: {
 
   const periodCondition = options.period
     ? (() => {
-        params.push(`${options.period}%`);
-        return `AND rc.comparison_period ILIKE $${params.length}`;
+        params.push(`${options.period.toUpperCase()}%`);
+        return `AND rc.comparison_period LIKE $${params.length}`;
       })()
     : '';
 

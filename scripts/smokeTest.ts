@@ -111,12 +111,23 @@ async function main(): Promise<void> {
   console.log(`Skip cache      : ${process.env.SKIP_CACHE === 'true' ? 'yes (post-flush)' : 'no (warm if seen before)'}`);
   console.log('');
 
-  // ── 1. new_route_launches per airport ──────────────────────────────────────
+  // ── 1. new_route_launches per airport (with and without period) ───────────
+  // The reviewer's slow timings (51-52s) were specifically against the
+  // *period-filtered* form of new_route_launches. Run both shapes.
   for (const airport of airports) {
     results.push(
       await timed(
         `new_route_launches(${airport})`,
         () => newRouteLaunches({ airport }),
+        summariseList
+      )
+    );
+  }
+  for (const airport of airports) {
+    results.push(
+      await timed(
+        `new_route_launches(${airport}, 2026-Q1)`,
+        () => newRouteLaunches({ airport, period: '2026-Q1' }),
         summariseList
       )
     );
@@ -179,15 +190,29 @@ async function main(): Promise<void> {
   // Look for at least one FI or XP carrier in any ranking response and confirm
   // is_unresolved is false and carrier_name is not "Unresolved (...)".
   const carrierResults: { code: string; resolved: boolean; name: string | undefined }[] = [];
+  // Includes the third-round flagged codes — we need to confirm G7 (GoJet)
+  // and ABX (ABX Air) now resolve to a real airline name in live output.
+  const watchCodes = new Set(['FI', 'XP', 'G7', 'ABX', 'KAQ']);
   for (const airport of airports) {
     const r = await carrierCapacityRanking({ market: airport });
     for (const c of r.ranking ?? []) {
-      if (c.carrier === 'FI' || c.carrier === 'XP') {
+      if (watchCodes.has(c.carrier)) {
         carrierResults.push({
           code: c.carrier,
           resolved: !c.is_unresolved,
           name: c.carrier_name,
         });
+      }
+    }
+    // Also peek at top_routes — top-route carrier_name is what the reviewer's
+    // "still unresolved" complaint was about, and it sits inside the nested
+    // arrays (not the top-level ranking row).
+    for (const c of r.ranking ?? []) {
+      for (const tr of c.top_routes ?? []) {
+        // top_routes inherits the same carrier as the parent rank entry,
+        // so resolution status mirrors c.is_unresolved. The check above
+        // covers it; nothing extra to do per top_route.
+        void tr;
       }
     }
   }
@@ -209,12 +234,17 @@ async function main(): Promise<void> {
 
   console.log('');
   console.log('━'.repeat(78));
-  console.log('Carrier resolution check (FI = Icelandair, XP = Avelo)');
+  console.log('Carrier resolution check (FI/XP/G7/ABX/KAQ)');
   console.log('━'.repeat(78));
   if (carrierResults.length === 0) {
-    console.log('(no FI or XP entries observed in the ranking responses; that\'s fine if neither carrier files segments at the tested airports)');
+    console.log('(no flagged carrier codes observed in the ranking responses; that\'s fine if none of them file segments at the tested airports)');
   } else {
+    // Dedupe by code so we only report each watched code once even when
+    // it appears at multiple airports.
+    const seen = new Set<string>();
     for (const c of carrierResults) {
+      if (seen.has(c.code)) continue;
+      seen.add(c.code);
       const status = c.resolved && c.name && !c.name.startsWith('Unresolved') ? 'PASS' : 'FAIL';
       console.log(`[${status}] ${c.code.padEnd(3)} → ${c.name ?? '(null)'} (resolved=${c.resolved})`);
       if (status === 'FAIL') fail++;

@@ -225,6 +225,11 @@ const CARRIERS: [string, string, string, string, string][] = [
   // ── US sub-mainline / regional infill ────────────────────────────────────
   ['PD', 'POE', 'Porter Airlines', 'CA', 'regional'],
   ['G7', 'GJS', 'GoJet Airlines', 'US', 'regional'],
+  // Aliases keyed by the BTS-published (often ICAO) code so older
+  // un-normalised route_changes rows still resolve via the standard
+  // LEFT JOIN ON c.iata_code = rc.carrier path.
+  ['ABX', 'ABX', 'ABX Air', 'US', 'cargo'],
+  ['KAQ', 'CKS', 'Kalitta Air', 'US', 'cargo'],
   ['EM', 'CFS', 'Empire Airlines', 'US', 'regional'],
   ['7H', 'RVF', 'Ravn Alaska', 'US', 'regional'],
   ['6E', 'IGO', 'IndiGo', 'IN', 'lowcost'],
