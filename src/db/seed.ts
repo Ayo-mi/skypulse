@@ -268,6 +268,26 @@ const CARRIERS: [string, string, string, string, string][] = [
   ['VS', 'VIR', 'Virgin Atlantic', 'GB', 'mainline'],
   ['FR', 'RYR', 'Ryanair', 'IE', 'lowcost'],
   ['U2', 'EZY', 'easyJet', 'GB', 'lowcost'],
+  // ── Round-4 reviewer additions: high-frequency unresolved real ops ──────
+  ['S4', 'RZO', 'Azores Airlines', 'PT', 'mainline'],
+  ['KX', 'CAY', 'Cayman Airways', 'KY', 'mainline'],
+  ['TJ', 'TBA', 'Tradewind Aviation', 'US', 'regional'],
+  ['LF', 'VTE', 'Contour Airlines', 'US', 'regional'],
+  ['VJT', 'VJT', 'VistaJet', 'MT', 'charter'],
+  ['GV', 'CDV', 'Grant Aviation', 'US', 'regional'],
+  ['7S', 'RYA', 'Ryan Air Service (Alaska)', 'US', 'regional'],
+  ['8E', 'BRG', 'Bering Air', 'US', 'regional'],
+  ['M5', 'KEN', 'Kenmore Air', 'US', 'regional'],
+  ['AN', 'WSN', 'Advanced Air', 'US', 'regional'],
+  ['L2', 'LYD', 'Lynden Air Cargo', 'US', 'cargo'],
+  ['QK', 'JZA', 'Jazz Aviation', 'CA', 'regional'],
+  ['TI', 'TWG', 'Tailwind Air', 'US', 'regional'],
+  ['6F', 'PRM', 'Primera Air', 'IS', 'lowcost'],
+  ['K2', 'EUL', 'Eurolot', 'PL', 'regional'],
+  ['5V', 'LYC', 'Lviv Airlines', 'UA', 'mainline'],
+  ['U7', 'UGD', 'Air Uganda', 'UG', 'mainline'],
+  ['X9', 'SOX', 'Southern Skyways', 'US', 'regional'],
+  ['KO', 'KMV', 'Komiaviatrans', 'RU', 'regional'],
 ];
 
 // ── Aircraft types (~30 common) ───────────────────────────────────────────────

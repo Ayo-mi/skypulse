@@ -74,7 +74,7 @@ export function buildKnownUnknowns(options: {
     gaps.push('Aircraft type mix not available for this route/period');
   }
   if (options.sourceCount < 2) {
-    gaps.push('Single data source (BTS T-100 only) — no schedule-source or press-release corroboration available');
+    gaps.push('Single data source (BTS T-100 Segment only) — no cross-source validation');
   }
   if (options.dataAge_days !== undefined && options.dataAge_days > 180) {
     gaps.push(
