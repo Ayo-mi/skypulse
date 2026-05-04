@@ -57,6 +57,21 @@ export async function getOrSet<T>(
 }
 
 /**
+ * Cache key version. Bump whenever a tool's response shape changes so that
+ * the deploy doesn't serve a stale cached blob that's missing newly required
+ * fields and triggers MCP schema-validation errors until the TTL evicts it.
+ *
+ *  v1 = original release through round 4
+ *  v2 = round 5: added `total_capacity_added_seats` to carrier ranking,
+ *       added `total_available` + `limit_applied` to new_route_launches
+ *       and frequency_losers responses.
+ *
+ * Old `skypulse:<tool>:...` keys are simply orphaned and evicted on their
+ * own 6-24h TTL — no manual FLUSHDB required at deploy time.
+ */
+export const CACHE_KEY_VERSION = 'v2';
+
+/**
  * Build a deterministic cache key from a tool name and parameters object.
  */
 export function buildCacheKey(toolName: string, params: Record<string, unknown>): string {
@@ -64,7 +79,7 @@ export function buildCacheKey(toolName: string, params: Record<string, unknown>)
     .sort()
     .map((k) => `${k}=${String(params[k] ?? '')}`)
     .join('&');
-  return `skypulse:${toolName}:${sorted}`;
+  return `skypulse:${CACHE_KEY_VERSION}:${toolName}:${sorted}`;
 }
 
 /**
