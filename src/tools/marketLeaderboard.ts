@@ -70,6 +70,7 @@ export async function carrierCapacityRanking(
       is_unresolved: agg.is_unresolved,
       total_capacity_change_abs: Number(agg.total_capacity_change_abs),
       total_capacity_change_pct: Number(agg.total_capacity_change_pct),
+      total_capacity_added_seats: Number(agg.total_capacity_added_seats),
       total_current_seats: Number(agg.total_current_seats),
       total_prior_seats: Number(agg.total_prior_seats),
       routes_gained: Number(agg.routes_gained),

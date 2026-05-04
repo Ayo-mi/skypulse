@@ -34,6 +34,14 @@ CASES=(
   "carrier_capacity_ranking(JFK)|carrier_capacity_ranking|{\"market\":\"JFK\"}"
   "frequency_losers(ATL)|frequency_losers|{\"market\":\"ATL\"}"
   "route_capacity_change(ATL, ORD)|route_capacity_change|{\"origin\":\"ATL\",\"destination\":\"ORD\"}"
+  # Round-5 reviewer specifics: flagship "no aircraft_category" prompt + hub
+  # payloads that previously triggered slow LLM synthesis (100+ rows).
+  "carrier_capacity_ranking(JFK, 2026-Q1, all-aircraft)|carrier_capacity_ranking|{\"market\":\"JFK\",\"period\":\"2026-Q1\"}"
+  "carrier_capacity_ranking(PHL, 2025-Q3, all-aircraft)|carrier_capacity_ranking|{\"market\":\"PHL\",\"period\":\"2025-Q3\"}"
+  "new_route_launches(LAS, default top-30)|new_route_launches|{\"airport\":\"LAS\"}"
+  "new_route_launches(ATL, default top-30)|new_route_launches|{\"airport\":\"ATL\"}"
+  "new_route_launches(LAS, limit=100)|new_route_launches|{\"airport\":\"LAS\",\"limit\":100}"
+  "frequency_losers(ATL, default top-30)|frequency_losers|{\"market\":\"ATL\"}"
 )
 
 printf "\n%-50s %10s %10s %s\n" "PROMPT" "TIME" "STATUS" "RESULT"

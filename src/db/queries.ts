@@ -379,6 +379,7 @@ export async function getCarrierCapacityAggregates(options: {
     is_unresolved: boolean;
     total_capacity_change_abs: number;
     total_capacity_change_pct: number;
+    total_capacity_added_seats: number;
     total_current_seats: number;
     total_prior_seats: number;
     routes_gained: number;
@@ -479,6 +480,28 @@ export async function getCarrierCapacityAggregates(options: {
           END, 0)::NUMERIC(8,2)                              AS total_capacity_change_pct,
         COALESCE(SUM(rc.current_inferred_seats), 0)::INTEGER AS total_current_seats,
         COALESCE(SUM(rc.prior_inferred_seats), 0)::INTEGER   AS total_prior_seats,
+        -- Gain-only sum: positive contributions only. For first_observed
+        -- and re_observed_after_gap rows (where capacity_change_abs is NULL
+        -- because there is no prior baseline) we use current_inferred_seats
+        -- as the implicit gain. The previous ORDER BY total_capacity_change_abs
+        -- (signed net) ranked carriers by net change, which inverted the
+        -- "Which carriers ADDED the most capacity?" prompt during contraction
+        -- quarters where every major carrier nets negative — agents then had
+        -- to enumerate aircraft_category values to reconstruct an answer.
+        -- (Round-5 reviewer regression.)
+        COALESCE(
+          SUM(GREATEST(
+            COALESCE(
+              rc.capacity_change_abs,
+              CASE WHEN rc.change_type IN ('first_observed_in_dataset','re_observed_after_gap')
+                   THEN rc.current_inferred_seats
+                   ELSE 0
+              END
+            ),
+            0
+          )),
+          0
+        )::INTEGER                                           AS total_capacity_added_seats,
         COUNT(*) FILTER (WHERE rc.change_type IN ('first_observed_in_dataset','re_observed_after_gap','growth','gauge_up'))::INTEGER AS routes_gained,
         COUNT(*) FILTER (WHERE rc.change_type IN ('suspension','reduction','gauge_down'))::INTEGER AS routes_lost,
         COUNT(*) FILTER (
@@ -502,6 +525,7 @@ export async function getCarrierCapacityAggregates(options: {
       END                                       AS is_unresolved,
       agg.total_capacity_change_abs,
       agg.total_capacity_change_pct,
+      agg.total_capacity_added_seats,
       agg.total_current_seats,
       agg.total_prior_seats,
       agg.routes_gained,
@@ -511,7 +535,13 @@ export async function getCarrierCapacityAggregates(options: {
     FROM aggregated agg
     LEFT JOIN carriers c     ON c.iata_code = agg.carrier
     LEFT JOIN top_routes_pc tr ON tr.carrier = agg.carrier
-    ORDER BY agg.total_capacity_change_abs DESC
+    -- Order by gains-first so the flagship "Which carriers added the most
+    -- capacity at <hub>?" prompt is answered correctly even in contraction
+    -- quarters. Tie-break on absolute net change so carriers with no gains
+    -- but big net changes still surface near the top instead of being
+    -- reordered alphabetically.
+    ORDER BY agg.total_capacity_added_seats DESC,
+             ABS(agg.total_capacity_change_abs) DESC
     LIMIT $${params.length}
   `;
 

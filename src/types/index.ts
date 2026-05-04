@@ -174,6 +174,15 @@ export interface RouteChangeDetail {
 export interface NewRouteLaunchesInput {
   airport: string;
   period?: string;
+  /**
+   * Maximum number of routes to return. Defaults to 30 to keep the
+   * response small enough for fast LLM synthesis at hub airports
+   * (LAS / ORD / ATL / BOS routinely surface 100+ first_observed rows).
+   * Set up to 100 when the agent needs the full list. Internally the
+   * underlying query always reads the indexed candidate pool of 100
+   * rows; `limit` only trims the JSON returned to the client.
+   */
+  limit?: number;
 }
 
 export interface NewRouteEntry {
@@ -196,11 +205,25 @@ export interface NewRouteLaunchesResult extends FreshnessMetadata {
   airport: string;
   period: string;
   routes: NewRouteEntry[];
+  /**
+   * Total number of matching routes available before the `limit` was applied.
+   * When `total_available > routes.length`, the response was trimmed; the
+   * agent can re-call with a higher `limit` (up to 100) to retrieve more.
+   */
+  total_available: number;
+  /** The `limit` value that was applied to produce `routes`. */
+  limit_applied: number;
 }
 
 export interface FrequencyLosersInput {
   market?: string;
   period?: string;
+  /**
+   * Maximum number of loser routes to return. Defaults to 30. Set up to
+   * 100 to retrieve the full list. See {@link NewRouteLaunchesInput.limit}
+   * for the rationale (hub-scale payloads slow LLM synthesis).
+   */
+  limit?: number;
 }
 
 export interface FrequencyLoserEntry {
@@ -222,6 +245,10 @@ export interface FrequencyLosersResult extends FreshnessMetadata {
   market: string | null;
   period: string | null;
   losers: FrequencyLoserEntry[];
+  /** Total matching loser routes before `limit` was applied. */
+  total_available: number;
+  /** The `limit` value that was applied to produce `losers`. */
+  limit_applied: number;
 }
 
 export interface CapacityDriverAnalysisInput {
@@ -272,8 +299,16 @@ export interface CarrierRankEntry {
   carrier_name?: string;
   /** True when the BTS carrier code did not resolve to a known operator. */
   is_unresolved?: boolean;
+  /** Signed net capacity change (current quarter - prior quarter) in seats. */
   total_capacity_change_abs: number;
   total_capacity_change_pct: number;
+  /**
+   * Sum of POSITIVE capacity contributions only — added seats from growth,
+   * gauge_up, first_observed_in_dataset and re_observed_after_gap rows.
+   * Use this to answer "Which carriers ADDED the most capacity?" — the
+   * default ranking is sorted by this field DESC.
+   */
+  total_capacity_added_seats: number;
   total_current_seats: number;
   total_prior_seats: number;
   routes_gained: number;

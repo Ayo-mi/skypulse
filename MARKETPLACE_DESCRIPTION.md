@@ -30,10 +30,10 @@ Typical BTS publication lag is 3–6 months after the reporting month closes; Sk
 Tools
 
 - `route_capacity_change` — per-carrier frequency, seat, and aircraft-mix deltas for a specific airport pair (e.g. JFK-LAX). Supports `days_back` windowing.
-- `new_route_launches` — first-observed and re-observed-after-gap routes at a given airport in the BTS T-100 dataset. NOT a real-time launch feed — see "Agent tips". Supports `period` quarterly filter.
-- `frequency_losers` — top N routes by steepest historical frequency decline. Optional market filter.
+- `new_route_launches` — first-observed and re-observed-after-gap routes at a given airport in the BTS T-100 dataset. Returns the top 30 routes by current_inferred_seats by default (hub airports can have 100+ matches); `total_available` indicates how many matched and the `limit` parameter (max 100) retrieves more. NOT a real-time launch feed — see "Agent tips". Supports `period` quarterly filter.
+- `frequency_losers` — top routes by steepest historical frequency decline. Returns the top 30 worst losers by default; `limit` (max 100) opens the full list. Optional market filter.
 - `capacity_driver_analysis` — classifies historical capacity change on a route as frequency-driven, gauge-driven, or mixed, with aircraft-mix evidence.
-- `carrier_capacity_ranking` — carrier leaderboard for a market, ranked by absolute seat-capacity change. Each ranked carrier includes a `top_routes` array (up to 3 routes that drove their ranking), so a single call answers both "who?" and "which routes?". Supports `aircraft_category` (narrowbody / widebody / regional_jet / turboprop) and `period`.
+- `carrier_capacity_ranking` — carrier leaderboard for a market, ranked by `total_capacity_added_seats` DESC (sum of POSITIVE capacity contributions only — added seats from growth, gauge_up, first_observed_in_dataset, re_observed_after_gap rows). Signed net change is also returned as `total_capacity_change_abs`. Each ranked carrier includes a `top_routes` array (up to 3 routes that drove their ranking), so a single call answers both "who added the most?" and "which routes drove the gains?" — even in contraction quarters where every major carrier nets negative. Both `aircraft_category` (narrowbody / widebody / regional_jet / turboprop) and `period` are OPTIONAL — omit either to get the all-aircraft / all-recent-periods aggregate in ONE call.
 
 Try asking
 
@@ -51,7 +51,8 @@ Agent tips
 - `new_route_launches` returns rows where `change_type` is `first_observed_in_dataset` or `re_observed_after_gap`. These are dataset observations, NOT confirmed marketing launches: a `first_observed_in_dataset` row simply means "the earliest BTS quarter we have data for this carrier-route", which may post-date the actual launch by months. `effective_date` is the BTS quarter midpoint, not the calendar launch day. Confidence on these rows is capped at 0.6 to reflect this — surface that to end users.
 - Pass airport codes as 3-letter IATA (e.g. `JFK`, not `KJFK`).
 - `period` strings use `YYYY-Qn` format (e.g. `2026-Q1`); omit to get the most recent comparison the tool can construct.
-- `carrier_capacity_ranking` ranks by **total absolute seats gained/lost**. A carrier can rank #1 with zero first_observed routes if it gauge-upped on an existing route. Always read `routes_gained`, `routes_lost`, and the capacity delta together, not in isolation.
+- `carrier_capacity_ranking` ranks by `total_capacity_added_seats` DESC (gains-only sum) so the flagship "Which carriers added the most capacity at <hub>?" prompt always returns a meaningful answer — even in contraction quarters where every major carrier nets negative on `total_capacity_change_abs`. Read `total_capacity_added_seats` to identify gainers, `total_capacity_change_abs` for net change, and `routes_gained` / `routes_lost` for the count breakdown.
+- `new_route_launches` and `frequency_losers` cap the default response at 30 rows so hub-airport answers stay small enough for fast LLM synthesis. The response includes `total_available` and `limit_applied` so agents know if the list was trimmed; pass `limit` (1–100) to retrieve more.
 - Every tool response includes `confidence` and `known_unknowns` — low confidence means partial vintage coverage, missing aircraft mix, or unmapped carrier codes; surface these to end users rather than silencing them.
 - `structuredContent` mirrors the schema-typed payload exactly; prefer it over parsing `content[0].text`.
 - Carriers whose BTS code does not resolve to a known operator are returned as `carrier_name: "Unresolved (BTS code: <X>)"` with `is_unresolved: true` — typically charter, small-cargo, or BTS-internal codes. The raw IATA code is always populated.

@@ -250,6 +250,14 @@ export const NEW_ROUTE_LAUNCHES_INPUT_SCHEMA = {
         'Optional period filter, e.g. "2025-Q3" or "2025-08". If omitted, returns all recent periods.',
       examples: ['2025-Q3', '2025-08'],
     },
+    limit: {
+      type: 'integer',
+      minimum: 1,
+      maximum: 100,
+      description:
+        'Maximum number of routes to return. Defaults to 30 (chosen so hub-airport responses stay small enough for fast LLM synthesis). Set up to 100 to retrieve the full list. Routes are ranked by current_inferred_seats DESC so the top N are the most consequential.',
+      examples: [30, 100],
+    },
   },
   required: ['airport'],
   additionalProperties: false,
@@ -316,12 +324,25 @@ export const NEW_ROUTE_LAUNCHES_OUTPUT_SCHEMA = {
         additionalProperties: false,
       },
     },
+    total_available: {
+      type: 'integer',
+      minimum: 0,
+      description:
+        'Total matching routes available before the limit was applied. When greater than routes.length, the response was trimmed; re-call with a higher `limit` (max 100) to retrieve more.',
+    },
+    limit_applied: {
+      type: 'integer',
+      minimum: 1,
+      description: 'The limit value (default 30) that was applied to produce `routes`.',
+    },
     ...FRESHNESS_PROPERTIES,
   },
   required: [
     'airport',
     'period',
     'routes',
+    'total_available',
+    'limit_applied',
     'as_of',
     'comparison_period',
     'source_refs',
@@ -349,6 +370,14 @@ export const FREQUENCY_LOSERS_INPUT_SCHEMA = {
       type: 'string',
       description: 'Optional period filter (e.g. "2025-Q3"). If omitted, returns recent periods.',
       examples: ['2025-Q3'],
+    },
+    limit: {
+      type: 'integer',
+      minimum: 1,
+      maximum: 100,
+      description:
+        'Maximum number of loser routes to return. Defaults to 30 to keep hub-airport responses small enough for fast LLM synthesis. Set up to 100 to retrieve the full list.',
+      examples: [30, 100],
     },
   },
   additionalProperties: false,
@@ -402,12 +431,25 @@ export const FREQUENCY_LOSERS_OUTPUT_SCHEMA = {
         additionalProperties: false,
       },
     },
+    total_available: {
+      type: 'integer',
+      minimum: 0,
+      description:
+        'Total matching loser routes available before the limit was applied. When greater than losers.length, the response was trimmed; re-call with a higher `limit` (max 100) to retrieve more.',
+    },
+    limit_applied: {
+      type: 'integer',
+      minimum: 1,
+      description: 'The limit value (default 30) that was applied to produce `losers`.',
+    },
     ...FRESHNESS_PROPERTIES,
   },
   required: [
     'market',
     'period',
     'losers',
+    'total_available',
+    'limit_applied',
     'as_of',
     'comparison_period',
     'source_refs',
@@ -559,8 +601,17 @@ export const CARRIER_CAPACITY_RANKING_OUTPUT_SCHEMA = {
           carrier: { type: 'string' },
           carrier_name: CARRIER_NAME_SCHEMA,
           is_unresolved: IS_UNRESOLVED_SCHEMA,
-          total_capacity_change_abs: { type: 'integer' },
+          total_capacity_change_abs: {
+            type: 'integer',
+            description:
+              'Signed net capacity change (current quarter total seats minus prior quarter total seats). Negative when the carrier contracted on net at this market.',
+          },
           total_capacity_change_pct: { type: 'number' },
+          total_capacity_added_seats: {
+            type: 'integer',
+            description:
+              'Sum of POSITIVE capacity contributions only — added seats from growth, gauge_up, first_observed_in_dataset and re_observed_after_gap rows. The default ranking is sorted by this field DESC so "Which carriers added the most capacity at <market>?" is answered correctly even in contraction quarters where every carrier nets negative.',
+          },
           total_current_seats: { type: 'integer' },
           total_prior_seats: { type: 'integer' },
           routes_gained: {
@@ -604,6 +655,7 @@ export const CARRIER_CAPACITY_RANKING_OUTPUT_SCHEMA = {
           'carrier',
           'total_capacity_change_abs',
           'total_capacity_change_pct',
+          'total_capacity_added_seats',
           'total_current_seats',
           'total_prior_seats',
           'routes_gained',
