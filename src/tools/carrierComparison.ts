@@ -30,7 +30,7 @@ export const FrequencyLosersSchema = z.object({
     .max(100)
     .optional()
     .describe(
-      'Maximum number of loser routes to return (default 30, max 100). Hub airports can have 100+ reduction rows; the default keeps payloads small enough for fast LLM synthesis. Increase up to 100 when the full list is needed.'
+      'OMIT for nearly every prompt. The default of 30 returns the worst losers and keeps hub-airport responses fast for LLM synthesis; only set explicitly (max 100) when the user asks for "the full list".'
     ),
 });
 

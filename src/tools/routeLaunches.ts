@@ -29,7 +29,7 @@ export const NewRouteLaunchesSchema = z.object({
     .max(100)
     .optional()
     .describe(
-      'Maximum number of routes to return (default 30, max 100). Hub airports can have 100+ first_observed routes per period; the default keeps payloads small enough for fast LLM synthesis. Increase up to 100 when the full list is needed.'
+      'OMIT for nearly every prompt. The default of 30 returns the most consequential new routes ranked by current_inferred_seats DESC and keeps hub-airport responses fast for LLM synthesis; passing limit=100 reflexively at hub airports adds 30+ seconds of synthesis time without improving the answer. Only set explicitly (max 100) when the user asks for "the full list".'
     ),
 });
 

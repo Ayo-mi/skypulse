@@ -254,8 +254,9 @@ export const NEW_ROUTE_LAUNCHES_INPUT_SCHEMA = {
       type: 'integer',
       minimum: 1,
       maximum: 100,
+      default: 30,
       description:
-        'Maximum number of routes to return. Defaults to 30 (chosen so hub-airport responses stay small enough for fast LLM synthesis). Set up to 100 to retrieve the full list. Routes are ranked by current_inferred_seats DESC so the top N are the most consequential.',
+        'Maximum number of routes to return. DO NOT SET unless the user explicitly asks for the full list. The default of 30 is the correct value for nearly every prompt — it returns the 30 most consequential new routes (ranked by current_inferred_seats DESC) and keeps hub-airport responses fast for the LLM to synthesize. Setting limit=100 reflexively on hub airports adds 30+ seconds of LLM synthesis time without improving the answer. Read total_available in the response to know how many routes matched; for "how many?" questions you do not need to retrieve the full list.',
       examples: [30, 100],
     },
   },
@@ -375,8 +376,9 @@ export const FREQUENCY_LOSERS_INPUT_SCHEMA = {
       type: 'integer',
       minimum: 1,
       maximum: 100,
+      default: 30,
       description:
-        'Maximum number of loser routes to return. Defaults to 30 to keep hub-airport responses small enough for fast LLM synthesis. Set up to 100 to retrieve the full list.',
+        'DO NOT SET unless the user explicitly asks for the full list. Default 30 is correct for nearly every prompt; passing limit=100 reflexively adds LLM synthesis latency without improving the answer.',
       examples: [30, 100],
     },
   },
@@ -570,9 +572,10 @@ export const CARRIER_CAPACITY_RANKING_INPUT_SCHEMA = {
     },
     aircraft_category: {
       type: 'string',
-      enum: ['narrowbody', 'widebody', 'regional_jet', 'turboprop', 'other'],
+      enum: ['all', 'narrowbody', 'widebody', 'regional_jet', 'turboprop', 'other'],
+      default: 'all',
       description:
-        'Optional category filter. Only rows whose dominant current aircraft falls in the category are counted.',
+        'Aircraft fleet filter. ALWAYS pass "all" (the default) unless the user explicitly asks for a specific fleet — "all" returns the complete cross-fleet ranking in one call and is the correct answer for the flagship "Which carriers added the most capacity?" prompt. The other values restrict to one fleet: "narrowbody" (e.g. B737, A320 family), "widebody" (B777, A350, B787), "regional_jet" (CRJ, ERJ), "turboprop" (DH8D, AT72), or "other" (everything else — typically a small bucket containing helicopters, business jets, and unmapped types). DO NOT enumerate fleet values to reconstruct an all-fleet view; pass "all" once instead.',
     },
     period: {
       type: 'string',
@@ -590,7 +593,11 @@ export const CARRIER_CAPACITY_RANKING_OUTPUT_SCHEMA = {
     'Ranks carriers in the given market by total seat capacity change.',
   properties: {
     market: { type: 'string' },
-    aircraft_category: { type: ['string', 'null'] },
+    aircraft_category: {
+      type: ['string', 'null'],
+      description:
+        'Echo of the fleet filter that was actually applied. "all" indicates the cross-fleet ranking (default); any of narrowbody / widebody / regional_jet / turboprop / other indicates the response was restricted to that fleet. Older cached responses may contain null which is equivalent to "all".',
+    },
     period: { type: ['string', 'null'] },
     ranking: {
       type: 'array',

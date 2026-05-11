@@ -24,6 +24,7 @@ import {
   CARRIER_CAPACITY_RANKING_OUTPUT_SCHEMA,
   ERROR_OUTPUT_SCHEMA,
 } from '../src/tools/schemas';
+import { CarrierCapacityRankingSchema } from '../src/tools/marketLeaderboard';
 
 const ajv = new Ajv({ strict: false, allErrors: true });
 addFormats(ajv);
@@ -256,6 +257,51 @@ describe('carrier_capacity_ranking', () => {
     expect(validateIn({ market: 'DFW' })).toBe(true);
     expect(validateIn({ market: 'DFW', aircraft_category: 'narrowbody' })).toBe(true);
     expect(validateIn({ market: 'DFW', aircraft_category: 'invalid' })).toBe(false);
+  });
+
+  // Round-6 regression guard. The R6 reviewer documented an LLM orchestrator
+  // that, faced with an enum that lacked a neutral choice, picked "other"
+  // as a default and got an empty ranking back. Then it enumerated the rest
+  // of the enum to reconstruct an all-fleet view (3-5 tool calls instead
+  // of 1, ~80s instead of ~15s). The fix has two layers:
+  //   1) JSON schema exposes "all" as a valid enum value AND declares it the
+  //      default — so the LLM has a reachable, schema-compliant way to ask
+  //      for the cross-fleet ranking.
+  //   2) Zod preprocess in the tool collapses any "neutral" value
+  //      (undefined / null / "" / "any" / case+whitespace variants) to
+  //      "all" so the live request never fails validation.
+  // This test pins both layers.
+  it('aircraft_category enum exposes "all" with default "all" (R6 guard)', () => {
+    const schema = CARRIER_CAPACITY_RANKING_INPUT_SCHEMA as unknown as {
+      properties: { aircraft_category: { enum: string[]; default?: string } };
+    };
+    expect(schema.properties.aircraft_category.enum).toContain('all');
+    expect(schema.properties.aircraft_category.default).toBe('all');
+    expect(validateIn({ market: 'DFW', aircraft_category: 'all' })).toBe(true);
+    expect(validateIn({ market: 'DFW' })).toBe(true);
+  });
+
+  // Layer 2 of the R6 guard: every "neutral" value an LLM might pass must
+  // collapse to "all" inside the Zod preprocess so the live request never
+  // fails validation. Without this, an empty-string aircraft_category from
+  // a confused orchestrator would 400 the request.
+  it.each([
+    [undefined, 'all'],
+    [null, 'all'],
+    ['', 'all'],
+    ['all', 'all'],
+    [' ALL ', 'all'],
+    ['any', 'all'],
+    ['narrowbody', 'narrowbody'],
+    ['NARROWBODY', 'narrowbody'],
+    ['widebody', 'widebody'],
+    ['other', 'other'],
+  ])('Zod preprocess: aircraft_category=%p → %p', (input, expected) => {
+    const parsed = CarrierCapacityRankingSchema.parse({
+      market: 'DFW',
+      aircraft_category: input,
+    });
+    expect(parsed.aircraft_category).toBe(expected);
   });
 
   it('validates a response', () => {

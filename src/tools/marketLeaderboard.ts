@@ -19,10 +19,31 @@ export const CarrierCapacityRankingSchema = z.object({
     .min(3)
     .max(3)
     .describe('IATA airport code defining the market (origin or destination)'),
+  // The aircraft_category accepts the explicit "all" sentinel plus the four
+  // real fleet categories. We preprocess so any "neutral" value an LLM
+  // orchestrator might pass (empty string, null, the literal word "any",
+  // accidental whitespace) collapses to "all" rather than failing Zod
+  // validation. The R6 reviewer documented an LLM that always picked "other"
+  // when faced with an enum that lacked a neutral choice — adding "all" as a
+  // first-class value (with a robust normalization layer) is the cleanest
+  // way to guarantee single-call answers.
   aircraft_category: z
-    .enum(['narrowbody', 'widebody', 'regional_jet', 'turboprop', 'other'])
-    .optional()
-    .describe('Filter by aircraft category'),
+    .preprocess(
+      (val) => {
+        if (val === undefined || val === null) return 'all';
+        if (typeof val === 'string') {
+          const trimmed = val.trim().toLowerCase();
+          if (trimmed === '' || trimmed === 'any' || trimmed === 'all') return 'all';
+          return trimmed;
+        }
+        return val;
+      },
+      z.enum(['all', 'narrowbody', 'widebody', 'regional_jet', 'turboprop', 'other'])
+    )
+    .default('all')
+    .describe(
+      'Fleet filter. Pass "all" (the default) for the cross-fleet ranking — this is the correct answer for "Which carriers added the most capacity?" prompts. Restrict to a specific fleet only when the user explicitly asks (e.g. "narrowbody gainers"). Do NOT enumerate fleet values to reconstruct an all-fleet view.'
+    ),
   period: z
     .string()
     .optional()
@@ -33,30 +54,53 @@ export type CarrierCapacityRankingSchemaType = z.infer<typeof CarrierCapacityRan
 
 const LEADERBOARD_TTL = 6 * 3600; // 6 hours
 
+// Values that mean "do not filter by aircraft category". Both the new "all"
+// enum value and the absence of the parameter map to the unfiltered query
+// path. We also accept an empty string defensively because some agent
+// orchestrators pass `""` instead of omitting the field.
+const ALL_AIRCRAFT_SENTINELS = new Set(['all', '', undefined]);
+
 export async function carrierCapacityRanking(
   input: CarrierCapacityRankingInput
 ): Promise<CarrierCapacityRankingResult> {
   const market = input.market.toUpperCase();
-  const aircraftCategory = input.aircraft_category;
+  // Normalize the aircraft_category input. The R6 reviewer surfaced a
+  // hard-to-debug failure mode: when aircraft_category was an enum without a
+  // neutral value, the LLM orchestrator picked "other" as a default and got
+  // an empty ranking, then enumerated the rest of the enum to reconstruct
+  // the all-aircraft view (3-5 tool calls instead of 1). The fix is to
+  // expose "all" as a first-class enum value AND treat it as "no filter"
+  // server-side, so the LLM has a reachable, schema-compliant way to ask
+  // for the cross-fleet ranking.
+  const rawCategory = input.aircraft_category as string | undefined;
+  const isAllAircraft = ALL_AIRCRAFT_SENTINELS.has(rawCategory);
+  const aircraftCategoryFilter = isAllAircraft ? undefined : rawCategory;
+  // Echo back the canonical label (`all` when no filter, the specific
+  // category otherwise) so consumers can read the response and know
+  // exactly what scope they got.
+  const aircraftCategoryEcho = isAllAircraft ? 'all' : rawCategory;
   const period = input.period;
 
   const cacheKey = buildCacheKey('carrier_capacity_ranking', {
     market,
-    aircraft_category: aircraftCategory ?? '',
+    // Cache key uses the canonical echo so "all", "" and absence collapse
+    // to the same Redis entry — saves three trips' worth of cache space
+    // and guarantees the pre-warm hit lands on the LLM-issued key.
+    aircraft_category: aircraftCategoryEcho ?? 'all',
     period: period ?? '',
   });
 
   return getOrSet(cacheKey, LEADERBOARD_TTL, async () => {
     logger.info('Executing carrier_capacity_ranking', {
       market,
-      aircraftCategory,
+      aircraftCategory: aircraftCategoryEcho,
       period,
     });
 
     const [aggregates, latestVintage] = await Promise.all([
       getCarrierCapacityAggregates({
         market,
-        aircraft_category: aircraftCategory,
+        aircraft_category: aircraftCategoryFilter,
         period,
         limit: 50,
       }),
@@ -121,7 +165,7 @@ export async function carrierCapacityRanking(
 
     return {
       market,
-      aircraft_category: aircraftCategory ?? null,
+      aircraft_category: aircraftCategoryEcho ?? 'all',
       period: period ?? null,
       ranking,
       ...freshness,
